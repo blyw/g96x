@@ -1,7 +1,6 @@
 #define DEBUG
 #define POSIX
 
-#include <signal.h>
 #include <iostream>
 #include <fstream>
 #include <iomanip>
@@ -42,6 +41,9 @@ struct frame {
     double box_4_x;
     double box_4_y;
     double box_4_z;
+    int init_shift_x;
+    int init_shift_y;
+    int init_shift_z;
 };
 
 //struct for holding parameters needed by the program
@@ -74,7 +76,7 @@ struct params {
 
 //code checked 20130122: CORRECT!
 //simple gathering of a specified atom in frame with respect to a given coordinate
-void SimpleGatherer(frame *framedata, int atom_number, params *me) {
+void FirstAtomBasedBoxShifter(frame *framedata, int atom_number, params *me) {
     double coords[3] = { 0, 0, 0 };
     double distance_shortest = 1E20;
     int min_shift[3] = { 0, 0, 0 };
@@ -84,7 +86,7 @@ void SimpleGatherer(frame *framedata, int atom_number, params *me) {
     int periodic_copies = 2;
     if (me->solute_count > 0)
     {
-        periodic_copies = me->solute_molecules[0][2];
+        periodic_copies = (me->solute_molecules[0][2]+1)*2;
     }
 
     for (int x = 0-periodic_copies; x <= periodic_copies; x++)
@@ -108,9 +110,23 @@ void SimpleGatherer(frame *framedata, int atom_number, params *me) {
         }
     }
     //shift the coordinates of the specified atom in the original framedata
-    framedata->x[atom_number] = framedata->x[atom_number] + (min_shift[0] * framedata->box_length_x);
-    framedata->y[atom_number] = framedata->y[atom_number] + (min_shift[1] * framedata->box_length_y);
-    framedata->z[atom_number] = framedata->z[atom_number] + (min_shift[2] * framedata->box_length_z);
+    for (int i = 0; i < framedata->x.size(); i++)
+    {        
+        framedata->x[i] = framedata->x[i] + (min_shift[0] * framedata->box_length_x);
+    }
+    for (int i = 0; i < framedata->y.size(); i++)
+    {        
+        framedata->y[i] = framedata->y[i] + (min_shift[1] * framedata->box_length_y);
+    }
+    for (int i = 0; i < framedata->z.size(); i++)
+    {
+        framedata->z[i] = framedata->z[i] + (min_shift[2] * framedata->box_length_z);
+    }
+
+    //maybe useful for debugging?
+    framedata->init_shift_x = min_shift[0];
+    framedata->init_shift_y = min_shift[1];
+    framedata->init_shift_z = min_shift[2];
 }
 
 //code checked 20130122: CORRECT!
@@ -867,6 +883,9 @@ int main(int argc, char* argv[])
     {
         std::cout << "  " << me.input_files[i] << std::endl;
 
+        //remember if box has been shift to gather first atom of a frame
+        int init_shift[3] = { 0, 0, 0 };
+
         //define file to read
         gz::igzstream file(me.input_files[i].c_str());
 
@@ -1049,7 +1068,7 @@ int main(int argc, char* argv[])
                             {
                                 //do not combine the following lines
                                 //gather should be kept separate from reference coordinates assignment
-                                SimpleGatherer(&currentFrame, 0, &me);
+                                FirstAtomBasedBoxShifter(&currentFrame, 0, &me);
                                 me.ref_coords[0] = currentFrame.x[0];
                                 me.ref_coords[1] = currentFrame.y[0];
                                 me.ref_coords[2] = currentFrame.z[0];
