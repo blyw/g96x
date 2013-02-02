@@ -1,4 +1,4 @@
-#define DEBUG
+//#define DEBUG
 #define POSIX
 
 #include <iostream>
@@ -89,6 +89,24 @@ void FirstAtomBasedBoxShifter(frame *framedata, int atom_number, params *me) {
         periodic_copies = (me->solute_molecules[0][2]+1)*2;
     }
 
+    //shift the coordinates of the specified atom in the original framedata based on the previous frame shift
+    if (!( min_shift[0] == 0 && min_shift[1] == 0 && min_shift[2] == 0))
+    {
+        for (int i = 0; i < framedata->x.size(); i++)
+        {        
+            framedata->x[i] = framedata->x[i] + (min_shift[0] * framedata->box_length_x);
+        }
+        for (int i = 0; i < framedata->y.size(); i++)
+        {        
+            framedata->y[i] = framedata->y[i] + (min_shift[1] * framedata->box_length_y);
+        }
+        for (int i = 0; i < framedata->z.size(); i++)
+        {
+            framedata->z[i] = framedata->z[i] + (min_shift[2] * framedata->box_length_z);
+        }
+    }
+
+    //gather the first atom fo the frame
     for (int x = 0-periodic_copies; x <= periodic_copies; x++)
     {
         for (int y = 0-periodic_copies; y <= periodic_copies; y++)
@@ -109,18 +127,22 @@ void FirstAtomBasedBoxShifter(frame *framedata, int atom_number, params *me) {
             }
         }
     }
-    //shift the coordinates of the specified atom in the original framedata
-    for (int i = 0; i < framedata->x.size(); i++)
-    {        
-        framedata->x[i] = framedata->x[i] + (min_shift[0] * framedata->box_length_x);
-    }
-    for (int i = 0; i < framedata->y.size(); i++)
-    {        
-        framedata->y[i] = framedata->y[i] + (min_shift[1] * framedata->box_length_y);
-    }
-    for (int i = 0; i < framedata->z.size(); i++)
+
+    //shift again if first atom was shifted
+    if (!( min_shift[0] == 0 && min_shift[1] == 0 && min_shift[2] == 0))
     {
-        framedata->z[i] = framedata->z[i] + (min_shift[2] * framedata->box_length_z);
+        for (int i = 0; i < framedata->x.size(); i++)
+        {        
+            framedata->x[i] = framedata->x[i] + (min_shift[0] * framedata->box_length_x);
+        }
+        for (int i = 0; i < framedata->y.size(); i++)
+        {        
+            framedata->y[i] = framedata->y[i] + (min_shift[1] * framedata->box_length_y);
+        }
+        for (int i = 0; i < framedata->z.size(); i++)
+        {
+            framedata->z[i] = framedata->z[i] + (min_shift[2] * framedata->box_length_z);
+        }
     }
 
     //maybe useful for debugging?
@@ -1085,6 +1107,11 @@ int main(int argc, char* argv[])
                             if (activeFrame_counter == activeFrame_count)
                             {
 #ifdef DEBUG
+                                for (int x = 0; x < activeFrames.size(); x++)
+                                {
+                                    std::cout << activeFrames[x].time << " " << activeFrames[x].timestep << std::endl;  
+                                }
+
                                 std::cout << "--->processing the batch ( " << activeFrame_counter << " / " << activeFrame_count << " )" << std::endl;
 #endif // DEBUG
 
@@ -1183,13 +1210,15 @@ int main(int argc, char* argv[])
                                     std::wcout << "\nEXCEPTION (join): " << e.what() << std::endl;
                                 }
 
-                                try 
+                                try                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
                                 {
-                                    activeFramesCopy = activeFrames;
+                                     activeFramesCopy = activeFrames;
                                     outfileThread = std::thread([&activeFramesCopy, activeFrame_count, &me, &outfile, writeAtomRecordsCount]()
                                     {
                                         for (int g = 0; g < activeFrame_count; g++)
                                         {
+                                            std::cout << activeFramesCopy[g].time << " " << activeFramesCopy[g].timestep << std::endl;
+                                            
                                             WriteOutFrame(&activeFramesCopy[g], outfile, writeAtomRecordsCount, me.outformat, me.cog_write);
                                         }
                                     });
