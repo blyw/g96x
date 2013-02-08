@@ -89,20 +89,21 @@ void FirstAtomBasedBoxShifter(frame *framedata, int atom_number, params *me) {
         periodic_copies = (me->solute_molecules[0][2]+1)*2;
     }
 
+	//THIS IS WRONG
     //shift the coordinates of the specified atom in the original framedata based on the previous frame shift
-    if (!( min_shift[0] == 0 && min_shift[1] == 0 && min_shift[2] == 0))
+    if (!(framedata->init_shift_x == 0 && framedata->init_shift_y == 0 && framedata->init_shift_z == 0))
     {
         for (int i = 0; i < framedata->x.size(); i++)
         {        
-            framedata->x[i] = framedata->x[i] + (min_shift[0] * framedata->box_length_x);
+            framedata->x[i] = framedata->x[i] + (framedata->init_shift_x * framedata->box_length_x);
         }
         for (int i = 0; i < framedata->y.size(); i++)
         {        
-            framedata->y[i] = framedata->y[i] + (min_shift[1] * framedata->box_length_y);
+            framedata->y[i] = framedata->y[i] + (framedata->init_shift_y * framedata->box_length_y);
         }
         for (int i = 0; i < framedata->z.size(); i++)
         {
-            framedata->z[i] = framedata->z[i] + (min_shift[2] * framedata->box_length_z);
+            framedata->z[i] = framedata->z[i] + (framedata->init_shift_z * framedata->box_length_z);
         }
     }
 
