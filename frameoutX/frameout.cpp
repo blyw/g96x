@@ -89,7 +89,6 @@ void FirstAtomBasedBoxShifter(frame *framedata, int atom_number, params *me) {
         periodic_copies = (me->solute_molecules[0][2]+1)*2;
     }
 
-	//THIS IS WRONG
     //shift the coordinates of the specified atom in the original framedata based on the previous frame shift
     if (!(framedata->init_shift_x == 0 && framedata->init_shift_y == 0 && framedata->init_shift_z == 0))
     {
@@ -389,24 +388,173 @@ void COGGatherer(frame *framedata, int first_atom, int last_atom, int molecule_s
 
 //code checked 20130122: CORRECT!
 //write out the data in either CNF or PDB compatible format
-void WriteOutFrame(frame *framedata, gz::ogzstream &outfile, int atomrecords, std::string outfile_type, bool cog_write) {
+//void WriteOutFrame(frame *framedata, gz::ogzstream &outfile, int atomrecords, std::string outfile_type, bool cog_write) {
+//    //check if it is possible to read file
+//    if (!outfile)
+//    {
+//        std::cerr << "cannot open otuput file" << "\n";
+//    }
+//    else {
+//        if (outfile_type=="cnf" || outfile_type=="trc")
+//        {
+//            outfile << "TIMESTEP" << "\n";
+//            outfile << " " << std::setw(17) << std::setprecision(0) << framedata->timestep << " " << std::setw(19) << std::fixed << std::setprecision(9) << framedata->time << "\n";
+//            outfile << "END" << "\n";
+//            outfile << "POSITION" << "\n";	
+//            outfile << std::fixed << std::setprecision(9);
+//            for (int i = 0; i < atomrecords; i++)
+//            {
+//                outfile << framedata->prefix[i] << " " << std::setw(14) << framedata->x[i] << " " << std::setw(14) << framedata->y[i] << " " << std::setw(14) << framedata->z[i] << "\n";
+//            }
+//            outfile << "END" << "\n";
+//            outfile << "GENBOX" << "\n";
+//            outfile << " " << framedata->boxtype << "\n";
+//            outfile << std::fixed << std::setprecision(9);
+//            outfile << " " << std::setw(14) << framedata->box_length_x << " " << std::setw(14) << framedata->box_length_y << " " << std::setw(14) << framedata->box_length_z << "\n";
+//            outfile << " " << std::setw(14) << framedata->box_angle_x << " " << std::setw(14) << framedata->box_angle_y << " " << std::setw(14) << framedata->box_angle_z << "\n";
+//            outfile << " " << std::setw(14) << framedata->box_3_x << " " << std::setw(14) << framedata->box_3_y << " " << std::setw(14) << framedata->box_3_z << "\n";
+//            outfile << " " << std::setw(14) << framedata->box_4_x << " " << std::setw(14) << framedata->box_4_y << " " << std::setw(14) << framedata->box_4_z << "\n";
+//            outfile << "END" << "\n";
+//        }
+//        if (outfile_type=="pdb")
+//        {
+//            //COLUMNS       DATA TYPE     FIELD         DEFINITION
+//            //--------------------------------------------------------------------------------------
+//            // 1 -  6       Record name   "REMARK"
+//            // 8 - 10       Integer       remarkNum     Remark  number. It is not an error for
+//            //                                          remark n to exist in an entry when
+//            //                                          remark n-1 does not.
+//            //12 - 79       LString       empty         Left  as white space in first line
+//            //                                          of each  new remark.
+//            outfile << "REMARK    1 " << std::setw(17) << std::setprecision(0) << framedata->timestep << " " << std::setw(19) << std::fixed << std::setprecision(9) << framedata->time << "\n";  
+//
+//            //outfile << "MODEL " << std::setw(8) << "\n";
+//            outfile << "MODEL \n";
+//            //COLUMNS       DATA  TYPE    FIELD          DEFINITION
+//            //-------------------------------------------------------------
+//            // 1 -  6       Record name   "CRYST1"
+//            // 7 - 15       Real(9.3)     a              a (Angstroms).
+//            //16 - 24       Real(9.3)     b              b (Angstroms).
+//            //25 - 33       Real(9.3)     c              c (Angstroms).
+//            //34 - 40       Real(7.2)     alpha          alpha (degrees).
+//            //41 - 47       Real(7.2)     beta           beta (degrees).
+//            //48 - 54       Real(7.2)     gamma          gamma (degrees).
+//            //56 - 66       LString       sGroup         Space  group.
+//            //67 - 70       Integer       z              Z value.
+//            //CRYST1    1.000    1.000    1.000  90.00  90.00  90.00 P 1           1
+//            outfile << "CRYST " 
+//                << std::setw(9) << std::setprecision(3) << framedata->box_length_x
+//                << std::setw(9) << std::setprecision(3) << framedata->box_length_y
+//                << std::setw(9) << std::setprecision(3) << framedata->box_length_z
+//                << std::setw(7) << std::setprecision(2) << framedata->box_angle_x
+//                << std::setw(7) << std::setprecision(2) << framedata->box_angle_y
+//                << std::setw(7) << std::setprecision(2) << framedata->box_angle_z
+//                << " P 1           1"
+//                << "\n";
+//            outfile << std::fixed << std::setprecision(9);
+//            for (int i = 0; i < atomrecords; i++)
+//            {
+//                //    1 ASN   H1         1    1.021435895    2.079909498    0.623854235
+//                //ATOM      1  N   THR A   1      -0.313  18.726  33.523  1.00 21.00           N
+//                // 1 -  6        Record name   "ATOM  "
+//                // 7 - 11        Integer       serial       Atom  serial number.
+//                //13 - 16        Atom          name         Atom name.
+//                //17             Character     altLoc       Alternate location indicator.
+//                //18 - 20        Residue name  resName      Residue name.
+//                //22             Character     chainID      Chain identifier.
+//                //23 - 26        Integer       resSeq       Residue sequence number.
+//                //27             AChar         iCode        Code for insertion of residues.
+//                //31 - 38        Real(8.3)     x            Orthogonal coordinates for X in Angstroms.
+//                //39 - 46        Real(8.3)     y            Orthogonal coordinates for Y in Angstroms.
+//                //47 - 54        Real(8.3)     z            Orthogonal coordinates for Z in Angstroms.
+//                //55 - 60        Real(6.2)     occupancy    Occupancy.
+//                //61 - 66        Real(6.2)     tempFactor   Temperature  factor.
+//                //77 - 78        LString(2)    element      Element symbol, right-justified.
+//                //79 - 80        LString(2)    charge       Charge  on the atom.
+//                outfile << "ATOM  "
+//                    << std::setw(5) << framedata->prefix[i].substr(19, 5) << " "
+//                    << " " << std::setw(3) << framedata->prefix[i].substr(12, 3)
+//                    << " "
+//                    << std::setw(3) << framedata->prefix[i].substr(6, 3)
+//                    << " A"
+//                    << std::setw(4) << framedata->prefix[i].substr(1, 4)
+//                    << "    "
+//                    << std::fixed
+//                    << std::setw(8) << std::setprecision(3) << framedata->x[i] * 10
+//                    << std::setw(8) << std::setprecision(3) << framedata->y[i] * 10
+//                    << std::setw(8) << std::setprecision(3) << framedata->z[i] * 10
+//                    << std::setw(6) << std::setprecision(2) << 1.0
+//                    << std::setw(6) << std::setprecision(2) << 1.0 << "\n"                
+//                    ;
+//            }
+//            if (cog_write)
+//            {
+//                outfile << "HETATM" << std::setw(5) << atomrecords+2 << "  ZN   ZN A9999    "
+//                    << std::fixed
+//                    << std::setw(8) << std::setprecision(3) << framedata->solute_cog_x * 10
+//                    << std::setw(8) << std::setprecision(3) << framedata->solute_cog_y * 10
+//                    << std::setw(8) << std::setprecision(3) << framedata->solute_cog_z * 10
+//                    << "  1.00  0.00          ZN  \n";
+//            }
+//            outfile << "ENDMDL" << "\n";
+//        }
+//    }
+//}
+
+//code checked 20130122: CORRECT!
+//write out the data in either CNF or PDB compatible format
+//this is not for production... code has to be written differently 
+void WriteOutFrame(frame *framedata, gz::ogzstream &outfile, params *me) {
     //check if it is possible to read file
     if (!outfile)
     {
         std::cerr << "cannot open otuput file" << "\n";
     }
     else {
-        if (outfile_type=="cnf" || outfile_type=="trc")
+
+
+        //quickfix
+        std::vector<int> temp_fix; 
+        for (int i = 0; i < me->solute_count; i++)
+        {
+            temp_fix.push_back(me->solute_molecules[i][0]-1);
+            temp_fix.push_back(me->solute_molecules[i][1]-1);
+        }
+        for (int i = 0; i < me->solutes_cog_molecules.size(); i++)
+        {
+            temp_fix.push_back(me->solutes_cog_molecules[i][0]-1);
+            temp_fix.push_back(me->solutes_cog_molecules[i][1]-1);
+        }
+        //quickfix
+
+        if (me->outformat=="cnf" || me->outformat=="trc")
         {
             outfile << "TIMESTEP" << "\n";
             outfile << " " << std::setw(17) << std::setprecision(0) << framedata->timestep << " " << std::setw(19) << std::fixed << std::setprecision(9) << framedata->time << "\n";
             outfile << "END" << "\n";
             outfile << "POSITION" << "\n";	
             outfile << std::fixed << std::setprecision(9);
-            for (int i = 0; i < atomrecords; i++)
+
+            //quickfix
+            for (int i = 0; i < me->atomrecords; i++)
             {
-                outfile << framedata->prefix[i] << " " << std::setw(14) << framedata->x[i] << " " << std::setw(14) << framedata->y[i] << " " << std::setw(14) << framedata->z[i] << "\n";
+                if (me->solvent_skip)
+                {
+                    for (int ii = 0; ii < temp_fix.size(); ii+=2)
+                    {
+                        if (i>=temp_fix[ii] && i<=temp_fix[ii+1])
+                        {
+                            outfile << framedata->prefix[i] << " " << std::setw(14) << framedata->x[i] << " " << std::setw(14) << framedata->y[i] << " " << std::setw(14) << framedata->z[i] << "\n";
+                        }
+                    }
+                }
+                else
+                {                    
+                    outfile << framedata->prefix[i] << " " << std::setw(14) << framedata->x[i] << " " << std::setw(14) << framedata->y[i] << " " << std::setw(14) << framedata->z[i] << "\n";
+                }
             }
+            //quickfix
+
             outfile << "END" << "\n";
             outfile << "GENBOX" << "\n";
             outfile << " " << framedata->boxtype << "\n";
@@ -417,7 +565,7 @@ void WriteOutFrame(frame *framedata, gz::ogzstream &outfile, int atomrecords, st
             outfile << " " << std::setw(14) << framedata->box_4_x << " " << std::setw(14) << framedata->box_4_y << " " << std::setw(14) << framedata->box_4_z << "\n";
             outfile << "END" << "\n";
         }
-        if (outfile_type=="pdb")
+        if (me->outformat=="pdb")
         {
             //COLUMNS       DATA TYPE     FIELD         DEFINITION
             //--------------------------------------------------------------------------------------
@@ -453,44 +601,91 @@ void WriteOutFrame(frame *framedata, gz::ogzstream &outfile, int atomrecords, st
                 << " P 1           1"
                 << "\n";
             outfile << std::fixed << std::setprecision(9);
-            for (int i = 0; i < atomrecords; i++)
+            for (int i = 0; i < me->atomrecords; i++)
             {
-                //    1 ASN   H1         1    1.021435895    2.079909498    0.623854235
-                //ATOM      1  N   THR A   1      -0.313  18.726  33.523  1.00 21.00           N
-                // 1 -  6        Record name   "ATOM  "
-                // 7 - 11        Integer       serial       Atom  serial number.
-                //13 - 16        Atom          name         Atom name.
-                //17             Character     altLoc       Alternate location indicator.
-                //18 - 20        Residue name  resName      Residue name.
-                //22             Character     chainID      Chain identifier.
-                //23 - 26        Integer       resSeq       Residue sequence number.
-                //27             AChar         iCode        Code for insertion of residues.
-                //31 - 38        Real(8.3)     x            Orthogonal coordinates for X in Angstroms.
-                //39 - 46        Real(8.3)     y            Orthogonal coordinates for Y in Angstroms.
-                //47 - 54        Real(8.3)     z            Orthogonal coordinates for Z in Angstroms.
-                //55 - 60        Real(6.2)     occupancy    Occupancy.
-                //61 - 66        Real(6.2)     tempFactor   Temperature  factor.
-                //77 - 78        LString(2)    element      Element symbol, right-justified.
-                //79 - 80        LString(2)    charge       Charge  on the atom.
-                outfile << "ATOM  "
-                    << std::setw(5) << framedata->prefix[i].substr(19, 5) << " "
-                    << " " << std::setw(3) << framedata->prefix[i].substr(12, 3)
-                    << " "
-                    << std::setw(3) << framedata->prefix[i].substr(6, 3)
-                    << " A"
-                    << std::setw(4) << framedata->prefix[i].substr(1, 4)
-                    << "    "
-                    << std::fixed
-                    << std::setw(8) << std::setprecision(3) << framedata->x[i] * 10
-                    << std::setw(8) << std::setprecision(3) << framedata->y[i] * 10
-                    << std::setw(8) << std::setprecision(3) << framedata->z[i] * 10
-                    << std::setw(6) << std::setprecision(2) << 1.0
-                    << std::setw(6) << std::setprecision(2) << 1.0 << "\n"                
-                    ;
+                //quickfix
+                if (me->solvent_skip)
+                {
+                    for (int ii = 0; ii < temp_fix.size(); ii+=2)
+                    {
+                        if (i>=temp_fix[ii] && i<=temp_fix[ii+1])
+                        {
+                            //quickfix
+                            //    1 ASN   H1         1    1.021435895    2.079909498    0.623854235
+                            //ATOM      1  N   THR A   1      -0.313  18.726  33.523  1.00 21.00           N
+                            // 1 -  6        Record name   "ATOM  "
+                            // 7 - 11        Integer       serial       Atom  serial number.
+                            //13 - 16        Atom          name         Atom name.
+                            //17             Character     altLoc       Alternate location indicator.
+                            //18 - 20        Residue name  resName      Residue name.
+                            //22             Character     chainID      Chain identifier.
+                            //23 - 26        Integer       resSeq       Residue sequence number.
+                            //27             AChar         iCode        Code for insertion of residues.
+                            //31 - 38        Real(8.3)     x            Orthogonal coordinates for X in Angstroms.
+                            //39 - 46        Real(8.3)     y            Orthogonal coordinates for Y in Angstroms.
+                            //47 - 54        Real(8.3)     z            Orthogonal coordinates for Z in Angstroms.
+                            //55 - 60        Real(6.2)     occupancy    Occupancy.
+                            //61 - 66        Real(6.2)     tempFactor   Temperature  factor.
+                            //77 - 78        LString(2)    element      Element symbol, right-justified.
+                            //79 - 80        LString(2)    charge       Charge  on the atom.
+                            outfile << "ATOM  "
+                                << std::setw(5) << framedata->prefix[i].substr(19, 5) << " "
+                                << " " << std::setw(3) << framedata->prefix[i].substr(12, 3)
+                                << " "
+                                << std::setw(3) << framedata->prefix[i].substr(6, 3)
+                                << " A"
+                                << std::setw(4) << framedata->prefix[i].substr(1, 4)
+                                << "    "
+                                << std::fixed
+                                << std::setw(8) << std::setprecision(3) << framedata->x[i] * 10
+                                << std::setw(8) << std::setprecision(3) << framedata->y[i] * 10
+                                << std::setw(8) << std::setprecision(3) << framedata->z[i] * 10
+                                << std::setw(6) << std::setprecision(2) << 1.0
+                                << std::setw(6) << std::setprecision(2) << 1.0 << "\n"                
+                                ;
+                        }
+                    }
+                }
+                else
+                {
+                    //quickfix
+                    //    1 ASN   H1         1    1.021435895    2.079909498    0.623854235
+                    //ATOM      1  N   THR A   1      -0.313  18.726  33.523  1.00 21.00           N
+                    // 1 -  6        Record name   "ATOM  "
+                    // 7 - 11        Integer       serial       Atom  serial number.
+                    //13 - 16        Atom          name         Atom name.
+                    //17             Character     altLoc       Alternate location indicator.
+                    //18 - 20        Residue name  resName      Residue name.
+                    //22             Character     chainID      Chain identifier.
+                    //23 - 26        Integer       resSeq       Residue sequence number.
+                    //27             AChar         iCode        Code for insertion of residues.
+                    //31 - 38        Real(8.3)     x            Orthogonal coordinates for X in Angstroms.
+                    //39 - 46        Real(8.3)     y            Orthogonal coordinates for Y in Angstroms.
+                    //47 - 54        Real(8.3)     z            Orthogonal coordinates for Z in Angstroms.
+                    //55 - 60        Real(6.2)     occupancy    Occupancy.
+                    //61 - 66        Real(6.2)     tempFactor   Temperature  factor.
+                    //77 - 78        LString(2)    element      Element symbol, right-justified.
+                    //79 - 80        LString(2)    charge       Charge  on the atom.
+                    outfile << "ATOM  "
+                        << std::setw(5) << framedata->prefix[i].substr(19, 5) << " "
+                        << " " << std::setw(3) << framedata->prefix[i].substr(12, 3)
+                        << " "
+                        << std::setw(3) << framedata->prefix[i].substr(6, 3)
+                        << " A"
+                        << std::setw(4) << framedata->prefix[i].substr(1, 4)
+                        << "    "
+                        << std::fixed
+                        << std::setw(8) << std::setprecision(3) << framedata->x[i] * 10
+                        << std::setw(8) << std::setprecision(3) << framedata->y[i] * 10
+                        << std::setw(8) << std::setprecision(3) << framedata->z[i] * 10
+                        << std::setw(6) << std::setprecision(2) << 1.0
+                        << std::setw(6) << std::setprecision(2) << 1.0 << "\n"                
+                        ;
+                }
             }
-            if (cog_write)
+            if (me->cog_write)
             {
-                outfile << "HETATM" << std::setw(5) << atomrecords+2 << "  ZN   ZN A9999    "
+                outfile << "HETATM" << std::setw(5) << me->atomrecords+2 << "  ZN   ZN A9999    "
                     << std::fixed
                     << std::setw(8) << std::setprecision(3) << framedata->solute_cog_x * 10
                     << std::setw(8) << std::setprecision(3) << framedata->solute_cog_y * 10
@@ -501,6 +696,7 @@ void WriteOutFrame(frame *framedata, gz::ogzstream &outfile, int atomrecords, st
         }
     }
 }
+
 
 //code checked 20130122: CORRECT!
 char* XPathGetText(std::string xpath_query, xmlXPathContextPtr xpathCtx) 
@@ -1078,23 +1274,32 @@ int main(int argc, char* argv[])
                             //the first frame has been collected, it's no longer the first pass through the loops
                             firstPass = false;
 
+                            int first_atom_solute = 0;
+                            if (me.solute_count >  0)
+                            {
+                                first_atom_solute = me.solute_molecules[0][0] - 1;
+                            }
+
                             //skip frame[0] from the reference process, because it is the first frame 
                             //and has no reference coordinates for the first atom
                             //also get the time of the first frame as reference for time-based skipping
                             if (frame_counter==0)
                             {
-                                me.ref_coords[0] = x[0];
-                                me.ref_coords[1] = y[0];
-                                me.ref_coords[2] = z[0];
+                                currentFrame.init_shift_x = 0;
+                                currentFrame.init_shift_y = 0;
+                                currentFrame.init_shift_z = 0;
+                                me.ref_coords[0] = x[first_atom_solute];
+                                me.ref_coords[1] = y[first_atom_solute];
+                                me.ref_coords[2] = z[first_atom_solute];
                             }
                             else 
                             {
                                 //do not combine the following lines
                                 //gather should be kept separate from reference coordinates assignment
-                                FirstAtomBasedBoxShifter(&currentFrame, 0, &me);
-                                me.ref_coords[0] = currentFrame.x[0];
-                                me.ref_coords[1] = currentFrame.y[0];
-                                me.ref_coords[2] = currentFrame.z[0];
+                                FirstAtomBasedBoxShifter(&currentFrame, first_atom_solute, &me);
+                                me.ref_coords[0] = currentFrame.x[first_atom_solute];
+                                me.ref_coords[1] = currentFrame.y[first_atom_solute];
+                                me.ref_coords[2] = currentFrame.z[first_atom_solute];
                             }
 
                             //until n frames have been read in
@@ -1213,14 +1418,15 @@ int main(int argc, char* argv[])
 
                                 try                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
                                 {
-                                     activeFramesCopy = activeFrames;
+                                    activeFramesCopy = activeFrames;
                                     outfileThread = std::thread([&activeFramesCopy, activeFrame_count, &me, &outfile, writeAtomRecordsCount]()
                                     {
                                         for (int g = 0; g < activeFrame_count; g++)
                                         {
-                                            std::cout << activeFramesCopy[g].time << " " << activeFramesCopy[g].timestep << std::endl;
-                                            
-                                            WriteOutFrame(&activeFramesCopy[g], outfile, writeAtomRecordsCount, me.outformat, me.cog_write);
+                                            //std::cout << activeFramesCopy[g].time << " " << activeFramesCopy[g].timestep << std::endl;
+
+                                            //WriteOutFrame(&activeFramesCopy[g], outfile, writeAtomRecordsCount, me.outformat, me.cog_write);
+                                            WriteOutFrame(&activeFramesCopy[g], outfile, &me);
                                         }
                                     });
                                 }
@@ -1393,7 +1599,8 @@ int main(int argc, char* argv[])
                 //write out all frames sequentially
                 for (int g = 0; g < activeFrame_counter; g++)
                 {
-                    WriteOutFrame(&activeFrames[g], outfile, writeAtomRecordsCount, me.outformat, me.cog_write);
+                    //WriteOutFrame(&activeFrames[g], outfile, writeAtomRecordsCount, me.outformat, me.cog_write);
+                    WriteOutFrame(&activeFrames[g], outfile, &me);
                 }
             }
             else

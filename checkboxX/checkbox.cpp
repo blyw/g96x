@@ -6,6 +6,7 @@
 #include <sstream>
 #include <iomanip>
 #include <iostream>
+#include <algorithm> 
 #include <string>
 #include <chrono>
 #include <thread>
@@ -74,7 +75,83 @@ struct params {
     int verbosity;
 };
 
-//code checked 20130201: CORRECT!
+//code checked 20130209: CORRECT!
+//solute gathering i.e. cluster algorithm (nearest neighbour)
+void NearestNeighbourFinder2(frame *framedata, std::vector<std::vector<double>> *periodic_interactions, params *me,
+    int *molecule_start, int *molecule_end, int *periodic_copies, std::vector<std::vector<int>> *grid_list){ 
+        //init variables
+        double distance_shortest = 1E20;
+        double distance = 0;
+        std::vector<std::vector<double>> frame_periodic_interactions;
+
+        //cut-off is derived from (longest bond)^2
+        double cut_off = me->distance_cut_off;
+        int i, j, g = 0;
+
+        double * xx = framedata->x.data();
+        double * yy = framedata->y.data();
+        double * zz = framedata->z.data();
+        int * glx = (*grid_list)[0].data();
+        int * gly = (*grid_list)[1].data();
+        int * glz = (*grid_list)[2].data();
+        int grid_num = (*grid_list)[0].size();
+        double bl_x = framedata->box_length_x;
+        double bl_y = framedata->box_length_y;
+        double bl_z = framedata->box_length_z;
+        int mol_start = *molecule_start;
+        int mol_end = *molecule_end;
+
+        //calculated 1/2 distance matrix and pick out the interacting atoms
+        for (i = mol_start - 1; i < mol_end; i++)
+        {
+            distance_shortest = 1E20;
+            for (j = i; j < mol_end; j++)
+            {
+                for (g = 0; g < grid_num; g++)
+                {
+                    distance =
+                        (((xx[j] + glx[g] * bl_x) - xx[i]) * ((xx[j] + glx[g] * bl_x) - xx[i])) +
+                        (((yy[j] + gly[g] * bl_y) - yy[i]) * ((yy[j] + gly[g] * bl_y) - yy[i])) +
+                        (((zz[j] + glz[g] * bl_z) - zz[i]) * ((zz[j] + glz[g] * bl_z) - zz[i]));
+
+                    //std::cout 
+                    //    << i << " " << j << std::endl
+                    //    << framedata->box_length_x << " " << framedata->box_length_y << " " << framedata->box_length_z << std::endl
+                    //    << grid_list[0][g] << " " << grid_list[1][g] << " " << grid_list[2][g] << std::endl
+                    //    << xx[i] << " " << yy[i] << " " << zz[i] << std::endl
+                    //    << xx[j] << " " << yy[j] << " " << zz[j] << std::endl
+                    //    << (xx[j] + grid_list[0][g] * framedata->box_length_x) - xx[i] << " " << (yy[j] + grid_list[1][g] * framedata->box_length_y) - yy[i] << " " << (zz[j] + grid_list[2][g] * framedata->box_length_z) - zz[i] << std::endl
+                    //    << distance 
+                    //    << std::endl;
+                    distance_shortest = (distance < distance_shortest) ? distance : distance_shortest;
+                }
+
+                //determine whether the atom see a periodoc copy
+                if (distance_shortest <= cut_off)
+                {
+                    //std::cout << sqrt(distance_shortest) << std::endl;
+                    std::vector<double> temp (5);
+                    temp[0] = framedata->time;
+                    temp[1] = framedata->timestep;
+                    temp[2] = i;
+                    temp[3] = j;
+                    temp[4] = sqrt(distance_shortest);
+                    frame_periodic_interactions.push_back(temp);
+                    temp.clear();
+                }
+            }
+        }
+        //BIG TEST
+
+        if (frame_periodic_interactions.size() > 0)
+        {
+            *periodic_interactions = frame_periodic_interactions;
+        }
+
+        frame_periodic_interactions.clear();
+}
+
+//code checked 20130201: CORRECT! (depreciated)
 //solute gathering i.e. cluster algorithm (nearest neighbour)
 void NearestNeighbourFinder(frame *framedata, std::vector<std::vector<std::vector<double>>> *periodic_interactions, int FrameId, params *me){ 
     //init variables
@@ -127,6 +204,11 @@ void NearestNeighbourFinder(frame *framedata, std::vector<std::vector<std::vecto
                     {
                         if (!(x==0 && y==0 && z==0))
                         {
+                            //std::cout 
+                            //    << i << " " << j << std::endl
+                            //    << xx[i] << " " << yy[i] << " " << zz[i] << std::endl
+                            //    << xx[j] << " " << yy[j] << " " << zz[j] << std::endl;
+
                             distance =
                                 (((xx[j] + x * framedata->box_length_x) - xx[i]) * ((xx[j] + x * framedata->box_length_x) - xx[i])) +
                                 (((yy[j] + y * framedata->box_length_y) - yy[i]) * ((yy[j] + y * framedata->box_length_y) - yy[i])) +
@@ -159,6 +241,10 @@ void NearestNeighbourFinder(frame *framedata, std::vector<std::vector<std::vecto
     {
         (*periodic_interactions)[FrameId]  = frame_periodic_interactions;
     }
+    else 
+    {
+        (*periodic_interactions)[FrameId].clear();
+    }
 
     frame_periodic_interactions.clear();
 }
@@ -167,32 +253,35 @@ void NearestNeighbourFinder(frame *framedata, std::vector<std::vector<std::vecto
 void WriteOutPeriodicInteractionAllAtom(frame *framedata, std::vector<std::vector<double>> *frame_periodic_interactions, gz::ogzstream &outfile, bool verbose) {
     if (!outfile)
     {
-        std::cerr << "cannot open otuput file" << "\n" << std::flush;
+        std::cerr << "cannot open output file" << "\n" << std::flush;
     }
     else {
+        int interaction_num = frame_periodic_interactions->size();
         if (verbose)
         {
-            for (int i = 0; i < (*frame_periodic_interactions).size(); i++)
+            for (int i = 0; i < interaction_num; i++)
             {
-                outfile << std::setw(9) << (*frame_periodic_interactions)[i][0] << " " 
-                    << std::setw(9) << (*frame_periodic_interactions)[i][1] << " " 
-                    << std::setw(10) << (*frame_periodic_interactions)[i][2] + 1<< " " 
-                    << std::setw(10) << (*frame_periodic_interactions)[i][3] + 1<< " " 
-                    << std::setw(16) << std::setprecision(9) << (*frame_periodic_interactions)[i][4] << " || [ "
-                    << framedata->prefix[(*frame_periodic_interactions)[i][2]] << " - " 
-                    << framedata->prefix[(*frame_periodic_interactions)[i][3]] << " ]" 
+                double * fpi = (*frame_periodic_interactions)[i].data();
+                outfile << std::setw(16) << std::setprecision(3) << fpi[0] << " " 
+                    << std::setw(16) << std::setprecision(0) << fpi[1] << " " 
+                    << std::setw(10) << std::setprecision(0) << fpi[2] + 1<< " " 
+                    << std::setw(10) << std::setprecision(0) << fpi[3] + 1<< " " 
+                    << std::setw(16) << std::setprecision(9) << fpi[4] << " || [ "
+                    << framedata->prefix[fpi[2]] << " - " 
+                    << framedata->prefix[fpi[3]] << " ]" 
                     "\n" << std::flush;
             }
         }
         else
         {
-            for (int i = 0; i < (*frame_periodic_interactions).size(); i++)
+            for (int i = 0; i < interaction_num; i++)
             {              
-                outfile << std::setw(9) << (*frame_periodic_interactions)[i][0] << " " 
-                    << std::setw(9) << (*frame_periodic_interactions)[i][1] << " " 
-                    << std::setw(10) << (*frame_periodic_interactions)[i][2] + 1 << " " 
-                    << std::setw(10) << (*frame_periodic_interactions)[i][3] + 1 << " "  
-                    << std::setw(16) << std::setprecision(9) << (*frame_periodic_interactions)[i][4] << 
+                double * fpi = (*frame_periodic_interactions)[i].data();
+                outfile << std::setw(16) << std::setprecision(3) << fpi[0] << " " 
+                    << std::setw(16) << std::setprecision(0) << fpi[1] << " " 
+                    << std::setw(10) << std::setprecision(0) << fpi[2] + 1 << " " 
+                    << std::setw(10) << std::setprecision(0) << fpi[3] + 1 << " "  
+                    << std::setw(16) << std::setprecision(9) << fpi[4] << 
                     "\n" << std::flush;
             }                
         }
@@ -207,7 +296,7 @@ void WriteOutPeriodicInteractionResiduePairs(frame *framedata, std::vector<std::
     //15944 SOLV  HW2    52493    1.966742392    4.000388119    1.796537431
     if (!outfile)
     {
-        std::cerr << "cannot open otuput file" << "\n" << std::flush;
+        std::cerr << "cannot open output file" << "\n" << std::flush;
     }
     else {
         std::string lastResidue1 = "";
@@ -223,8 +312,9 @@ void WriteOutPeriodicInteractionResiduePairs(frame *framedata, std::vector<std::
             int d = 0;
             for (int i = 0; i < (*frame_periodic_interactions).size(); i++)
             {   
-                currentResidue1 = framedata->prefix[(*frame_periodic_interactions)[i][2]].substr(0,5);
-                currentResidue2 = framedata->prefix[(*frame_periodic_interactions)[i][3]].substr(0,5);
+                double * fpi = (*frame_periodic_interactions)[i].data();
+                currentResidue1 = framedata->prefix[fpi[2]].substr(0,5);
+                currentResidue2 = framedata->prefix[fpi[3]].substr(0,5);
                 if (lastResidue1 == "" && lastResidue2 == "")
                 {
                     //assign values when i = 0
@@ -232,16 +322,16 @@ void WriteOutPeriodicInteractionResiduePairs(frame *framedata, std::vector<std::
                     lastResidue2 = currentResidue2;
                     counter = 1;
                     distance_shortest = 1e20;
-                    sum = (*frame_periodic_interactions)[i][4];
-                    sum_relative = cut_off/(*frame_periodic_interactions)[i][4];
+                    sum = fpi[4];
+                    sum_relative = cut_off/fpi[4];
                 }
                 else if (currentResidue1 != lastResidue1)
                 {
                     //write if the first residue changes
-                    outfile << std::setw(9) << (*frame_periodic_interactions)[i][0] << " " 
-                        << std::setw(9) << (*frame_periodic_interactions)[i][1] << " " 
-                        << std::setw(9) << lastResidue1 << " " 
-                        << std::setw(9) << lastResidue2 << " "
+                    outfile << std::setw(16) << std::setprecision(3) <<  fpi[0] << " " 
+                        << std::setw(16) << std::setprecision(0) <<  fpi[1] << " " 
+                        << std::setw(10) << std::setprecision(0) <<  lastResidue1 << " " 
+                        << std::setw(10) << std::setprecision(0) <<  lastResidue2 << " "
                         << std::setw(16) << std::setprecision(9) << distance_shortest << " " 
                         << std::setw(16) << std::setprecision(9) << sum/counter << " " 
                         << std::setw(16) << std::setprecision(9) << sum_relative/counter << " || [ "
@@ -254,16 +344,16 @@ void WriteOutPeriodicInteractionResiduePairs(frame *framedata, std::vector<std::
                     lastResidue2 = currentResidue2;                  
                     counter = 1;
                     distance_shortest = 1e20;
-                    sum = (*frame_periodic_interactions)[i][4];
-                    sum_relative = cut_off/(*frame_periodic_interactions)[i][4];
+                    sum = fpi[4];
+                    sum_relative = cut_off/fpi[4];
                 }
                 else if (currentResidue1 == lastResidue1 && currentResidue2 != lastResidue2)
                 {
                     //write if the second residue changes
-                    outfile << std::setw(9) << (*frame_periodic_interactions)[i][0] << " " 
-                        << std::setw(9) << (*frame_periodic_interactions)[i][1] << " " 
-                        << std::setw(9) << lastResidue1 << " " 
-                        << std::setw(9) << lastResidue2 << " "
+                    outfile << std::setw(16) << std::setprecision(3) << fpi[0] << " " 
+                        << std::setw(16) << std::setprecision(0) << fpi[1] << " " 
+                        << std::setw(10) << std::setprecision(0) << lastResidue1 << " " 
+                        << std::setw(10) << std::setprecision(0) << lastResidue2 << " "
                         << std::setw(16) << std::setprecision(9) << distance_shortest << " " 
                         << std::setw(16) << std::setprecision(9) << sum/counter << " " 
                         << std::setw(16) << std::setprecision(9) << sum_relative/counter <<  " || [ "
@@ -275,21 +365,21 @@ void WriteOutPeriodicInteractionResiduePairs(frame *framedata, std::vector<std::
                     lastResidue2 = currentResidue2;     
                     counter = 1;
                     distance_shortest = 1e20;
-                    sum = (*frame_periodic_interactions)[i][4];
-                    sum_relative = cut_off/(*frame_periodic_interactions)[i][4];
+                    sum = fpi[4];
+                    sum_relative = cut_off/fpi[4];
                 }
                 else
                 {
                     counter += 1;
-                    sum += (*frame_periodic_interactions)[i][4];
-                    sum_relative += cut_off/(*frame_periodic_interactions)[i][4];
+                    sum += fpi[4];
+                    sum_relative += cut_off/fpi[4];
                 }
 
                 //keep track of shortest distance
-                if ((*frame_periodic_interactions)[i][4] < distance_shortest)
+                if (fpi[4] < distance_shortest)
                 {
                     d = i;
-                    distance_shortest = (*frame_periodic_interactions)[i][4];
+                    distance_shortest = fpi[4];
                 }
             }
         }
@@ -299,8 +389,9 @@ void WriteOutPeriodicInteractionResiduePairs(frame *framedata, std::vector<std::
 
             for (int i = 0; i < (*frame_periodic_interactions).size(); i++)
             {   
-                currentResidue1 = framedata->prefix[(*frame_periodic_interactions)[i][2]].substr(0,5);
-                currentResidue2 = framedata->prefix[(*frame_periodic_interactions)[i][3]].substr(0,5);
+                double * fpi = (*frame_periodic_interactions)[i].data();
+                currentResidue1 = framedata->prefix[fpi[2]].substr(0,5);
+                currentResidue2 = framedata->prefix[fpi[3]].substr(0,5);
                 if (lastResidue1 == "" && lastResidue2 == "")
                 {
                     //assign values when i = 0
@@ -308,16 +399,16 @@ void WriteOutPeriodicInteractionResiduePairs(frame *framedata, std::vector<std::
                     lastResidue2 = currentResidue2;
                     counter = 1;
                     distance_shortest = 1e20;
-                    sum = (*frame_periodic_interactions)[i][4];
-                    sum_relative = cut_off/(*frame_periodic_interactions)[i][4];
+                    sum = fpi[4];
+                    sum_relative = cut_off/fpi[4];
                 }
                 else if (currentResidue1 != lastResidue1)
                 {
                     //write if the first residue changes
-                    outfile << std::setw(9) << (*frame_periodic_interactions)[i][0] << " " 
-                        << std::setw(9) << (*frame_periodic_interactions)[i][1] << " " 
-                        << std::setw(9) << lastResidue1 << " " 
-                        << std::setw(9) << lastResidue2 << " "
+                    outfile << std::setw(16) << std::setprecision(3) << fpi[0] << " " 
+                        << std::setw(16) << std::setprecision(0) << fpi[1] << " " 
+                        << std::setw(10) << std::setprecision(0) << lastResidue1 << " " 
+                        << std::setw(10) << std::setprecision(0) << lastResidue2 << " "
                         << std::setw(16) << std::setprecision(9) << distance_shortest << " " 
                         << std::setw(16) << std::setprecision(9) << sum/counter << " " 
                         << std::setw(16) << std::setprecision(9) << sum_relative/counter <<
@@ -328,16 +419,16 @@ void WriteOutPeriodicInteractionResiduePairs(frame *framedata, std::vector<std::
                     lastResidue2 = currentResidue2;                  
                     counter = 1;
                     distance_shortest = 1e20;
-                    sum = (*frame_periodic_interactions)[i][4];
-                    sum_relative = cut_off/(*frame_periodic_interactions)[i][4];
+                    sum = fpi[4];
+                    sum_relative = cut_off/fpi[4];
                 }
                 else if (currentResidue1 == lastResidue1 && currentResidue2 != lastResidue2)
                 {
                     //write if the second residue changes
-                    outfile << std::setw(9) << (*frame_periodic_interactions)[i][0] << " " 
-                        << std::setw(9) << (*frame_periodic_interactions)[i][1] << " " 
-                        << std::setw(9) << lastResidue1 << " " 
-                        << std::setw(9) << lastResidue2 << " "
+                    outfile << std::setw(16) << std::setprecision(3) << fpi[0] << " " 
+                        << std::setw(16) << std::setprecision(0) << fpi[1] << " " 
+                        << std::setw(10) << std::setprecision(0) << lastResidue1 << " " 
+                        << std::setw(10) << std::setprecision(0) << lastResidue2 << " "
                         << std::setw(16) << std::setprecision(9) << distance_shortest << " " 
                         << std::setw(16) << std::setprecision(9) << sum/counter << " " 
                         << std::setw(16) << std::setprecision(9) << sum_relative/counter <<
@@ -347,20 +438,20 @@ void WriteOutPeriodicInteractionResiduePairs(frame *framedata, std::vector<std::
                     lastResidue2 = currentResidue2;     
                     counter = 1;
                     distance_shortest = 1e20;
-                    sum = (*frame_periodic_interactions)[i][4];
-                    sum_relative = cut_off/(*frame_periodic_interactions)[i][4];
+                    sum = fpi[4];
+                    sum_relative = cut_off/fpi[4];
                 }
                 else
                 {
                     counter += 1;
-                    sum += (*frame_periodic_interactions)[i][4];
-                    sum_relative += cut_off/(*frame_periodic_interactions)[i][4];
+                    sum += fpi[4];
+                    sum_relative += cut_off/fpi[4];
                 }
 
                 //keep track of shortest distance
-                if ((*frame_periodic_interactions)[i][4] < distance_shortest)
+                if (fpi[4] < distance_shortest)
                 {
-                    distance_shortest = (*frame_periodic_interactions)[i][4];
+                    distance_shortest = fpi[4];
                 }
             }    
         }
@@ -375,7 +466,7 @@ void WriteOutPeriodicInteractionResidue(frame *framedata, std::vector<std::vecto
     //15944 SOLV  HW2    52493    1.966742392    4.000388119    1.796537431
     if (!outfile)
     {
-        std::cerr << "cannot open otuput file" << "\n" << std::flush;
+        std::cerr << "cannot open output file" << "\n" << std::flush;
     }
     else {
         std::string lastResidue1 = "";
@@ -389,22 +480,23 @@ void WriteOutPeriodicInteractionResidue(frame *framedata, std::vector<std::vecto
             int d = 0;
             for (int i = 0; i < (*frame_periodic_interactions).size(); i++)
             {   
-                currentResidue1 = framedata->prefix[(*frame_periodic_interactions)[i][2]].substr(0,5);
+                double * fpi = (*frame_periodic_interactions)[i].data();
+                currentResidue1 = framedata->prefix[fpi[2]].substr(0,5);
                 if (lastResidue1 == "")
                 {
                     //assign values when i = 0
                     lastResidue1 = currentResidue1;
                     counter = 1;
                     distance_shortest = 1e20;
-                    sum = (*frame_periodic_interactions)[i][4];
-                    sum_relative = cut_off/(*frame_periodic_interactions)[i][4];
+                    sum = fpi[4];
+                    sum_relative = cut_off/fpi[4];
                 }
                 else if (currentResidue1 != lastResidue1)
                 {
                     //write if the first residue changes
-                    outfile << std::setw(9) << (*frame_periodic_interactions)[i][0] << " " 
-                        << std::setw(9) << (*frame_periodic_interactions)[i][1] << " " 
-                        << std::setw(9) << lastResidue1 << " " 
+                    outfile << std::setw(16) << std::setprecision(3) << fpi[0] << " " 
+                        << std::setw(16) << std::setprecision(0) << fpi[1] << " " 
+                        << std::setw(10) << std::setprecision(0) << lastResidue1 << " " 
                         << std::setw(16) << std::setprecision(9) << distance_shortest << " " 
                         << std::setw(16) << std::setprecision(9) << sum/counter << " " 
                         << std::setw(16) << std::setprecision(9) << sum_relative/counter << " || [ "
@@ -416,44 +508,45 @@ void WriteOutPeriodicInteractionResidue(frame *framedata, std::vector<std::vecto
                     lastResidue1 = currentResidue1;               
                     counter = 1;
                     distance_shortest = 1e20;
-                    sum = (*frame_periodic_interactions)[i][4];
-                    sum_relative = cut_off/(*frame_periodic_interactions)[i][4];
+                    sum = fpi[4];
+                    sum_relative = cut_off/fpi[4];
                 }
                 else
                 {
                     counter += 1;
-                    sum += (*frame_periodic_interactions)[i][4];
-                    sum_relative += cut_off/(*frame_periodic_interactions)[i][4];
+                    sum += fpi[4];
+                    sum_relative += cut_off/fpi[4];
                 }
 
                 //keep track of shortest distance
-                if ((*frame_periodic_interactions)[i][4] < distance_shortest)
+                if (fpi[4] < distance_shortest)
                 {
                     d = i;
-                    distance_shortest = (*frame_periodic_interactions)[i][4];
+                    distance_shortest = fpi[4];
                 }
             }
         }
         else
         {
             for (int i = 0; i < (*frame_periodic_interactions).size(); i++)
-            {   
-                currentResidue1 = framedata->prefix[(*frame_periodic_interactions)[i][2]].substr(0,5);
+            {  
+                double * fpi = (*frame_periodic_interactions)[i].data(); 
+                currentResidue1 = framedata->prefix[fpi[2]].substr(0,5);
                 if (lastResidue1 == "")
                 {
                     //assign values when i = 0
                     lastResidue1 = currentResidue1;
                     counter = 1;
                     distance_shortest = 1e20;
-                    sum = (*frame_periodic_interactions)[i][4];
-                    sum_relative = cut_off/(*frame_periodic_interactions)[i][4];
+                    sum = fpi[4];
+                    sum_relative = cut_off/fpi[4];
                 }
                 else if (currentResidue1 != lastResidue1)
                 {
                     //write if the first residue changes
-                    outfile << std::setw(9) << (*frame_periodic_interactions)[i][0] << " " 
-                        << std::setw(9) << (*frame_periodic_interactions)[i][1] << " " 
-                        << std::setw(9) << lastResidue1 << " " 
+                    outfile  << std::setw(16) << std::setprecision(3) << fpi[0] << " " 
+                         << std::setw(16) << std::setprecision(0) << fpi[1] << " " 
+                        << std::setw(10) << std::setprecision(0) << lastResidue1 << " " 
                         << std::setw(16) << std::setprecision(9) << distance_shortest << " " 
                         << std::setw(16) << std::setprecision(9) << sum/counter << " " 
                         << std::setw(16) << std::setprecision(9) << sum_relative/counter <<
@@ -463,20 +556,20 @@ void WriteOutPeriodicInteractionResidue(frame *framedata, std::vector<std::vecto
                     lastResidue1 = currentResidue1;                
                     counter = 1;
                     distance_shortest = 1e20;
-                    sum = (*frame_periodic_interactions)[i][4];
-                    sum_relative = cut_off/(*frame_periodic_interactions)[i][4];
+                    sum = fpi[4];
+                    sum_relative = cut_off/fpi[4];
                 }
                 else
                 {
                     counter += 1;
-                    sum += (*frame_periodic_interactions)[i][4];
-                    sum_relative += cut_off/(*frame_periodic_interactions)[i][4];
+                    sum += fpi[4];
+                    sum_relative += cut_off/fpi[4];
                 }
 
                 //keep track of shortest distance
-                if ((*frame_periodic_interactions)[i][4] < distance_shortest)
+                if (fpi[4] < distance_shortest)
                 {
-                    distance_shortest = (*frame_periodic_interactions)[i][4];
+                    distance_shortest = fpi[4];
                 }
             }    
         }
@@ -491,7 +584,7 @@ void WriteOutPeriodicInteractionShortest(frame *framedata, std::vector<std::vect
     //15944 SOLV  HW2    52493    1.966742392    4.000388119    1.796537431
     if (!outfile)
     {
-        std::cerr << "cannot open otuput file" << "\n" << std::flush;
+        std::cerr << "cannot open output file" << "\n" << std::flush;
     }
     else {
         double distance_shortest = 1e20;
@@ -501,12 +594,13 @@ void WriteOutPeriodicInteractionShortest(frame *framedata, std::vector<std::vect
 
         for (int i = 0; i < (*frame_periodic_interactions).size(); i++)
         {   
+            double * fpi = (*frame_periodic_interactions)[i].data();
             counter += 1;
-            sum += (*frame_periodic_interactions)[i][4];
-            sum_relative += cut_off/(*frame_periodic_interactions)[i][4];
-            if ((*frame_periodic_interactions)[i][4] < distance_shortest)
+            sum += fpi[4];
+            sum_relative += cut_off/fpi[4];
+            if (fpi[4] < distance_shortest)
             {
-                distance_shortest = (*frame_periodic_interactions)[i][4];
+                distance_shortest = fpi[4];
             }
         }
 
@@ -519,8 +613,8 @@ void WriteOutPeriodicInteractionShortest(frame *framedata, std::vector<std::vect
             sum_relative = sum_relative/counter;
         }
 
-        outfile << std::setw(9) << (*frame_periodic_interactions)[0][0] << " " 
-            << std::setw(9) << (*frame_periodic_interactions)[0][1] << " " 
+        outfile << std::setw(16) << std::setprecision(3) << (*frame_periodic_interactions)[0][0] << " " 
+            << std::setw(16) << std::setprecision(0) <<  (*frame_periodic_interactions)[0][1] << " " 
             << std::setw(16) << std::setprecision(9) << distance_shortest << " " 
             << std::setw(16) << std::setprecision(9) << sum << " " 
             << std::setw(16) << std::setprecision(9) << sum_relative << 
@@ -545,7 +639,7 @@ void TrcReferenceFrame(std::vector<std::string> *prefix, std::string trc_referen
     //check if it is possible to read file
     if (!infile)
     {
-        std::cerr << "cannot open otuput file" << "\n" << std::flush;
+        std::cerr << "cannot open output file" << "\n" << std::flush;
     }
     else {
         //read line by line as string while not end-of-file
@@ -738,7 +832,7 @@ void PositionBlockParser(params &me, std::string &line, int positionBlock_counte
         (*y)[positionBlock_counter] = std::stod(line.substr(15,15));
         (*z)[positionBlock_counter] = std::stod(line.substr(30,15));
     }
-    if (me.informat == "cnf")
+    else if (me.informat == "cnf")
     {
         (*prefix)[positionBlock_counter] = line.substr(0,24);
         (*x)[positionBlock_counter] = std::stod(line.substr(25,15));
@@ -796,9 +890,44 @@ int main(int argc, char* argv[])
     bool firstPass = true;
 
     //frame counter which can be used for skipping frames
-    int frame_counter = 0;
+    int frame_counter, s, molecule_start, molecule_end, px, py, pz = 0;
     double frame_time = 0;
     bool processThisFrame = false;
+
+    //dimension expansion factor
+    int periodic_copies = 1;
+
+    //get end and start of search
+    for (s = 0; s < me.solute_count; s++)
+    {
+        //define first atom, last atom and number of periodic copies of a solute molecule
+        if (s == 0)
+        {
+            molecule_start = me.solute_molecules[s][0];
+        }
+        if (s == (me.solute_count - 1))
+        {
+            molecule_end = me.solute_molecules[s][1];
+        }       
+    }
+
+    //create a predefined grid list for the search
+    std::vector<std::vector<int>> grid_list (3);
+    for (px = 0-periodic_copies; px <= periodic_copies; px++)
+    {
+        for (py = 0-periodic_copies; py <= periodic_copies; py++)
+        {
+            for (pz = 0-periodic_copies; pz <= periodic_copies; pz++)
+            {
+                if (!(px==0 && py==0 && pz==0))
+                {
+                    grid_list[0].push_back(px);
+                    grid_list[1].push_back(py);
+                    grid_list[2].push_back(pz);
+                }
+            }
+        }
+    }
 
     //position block array size
     std::vector<std::string> prefix (me.atomrecords);
@@ -823,6 +952,7 @@ int main(int argc, char* argv[])
     //determine output filename
     gz::ogzstream outfile;
     outfile.open((me.outfilename + ".gz").c_str(), std::ios_base::out);
+    outfile << std::fixed;
 
     //output thread
     std::thread outfileThread = std::thread([](){return 0;});
@@ -858,7 +988,7 @@ int main(int argc, char* argv[])
         //check if it is possible to read file
         if (!file)
         {
-            std::cerr << "cannot open otuput file" << "\n" << std::flush;
+            std::cerr << "cannot open output file" << "\n" << std::flush;
         }
         else {
 
@@ -1034,10 +1164,11 @@ int main(int argc, char* argv[])
                                 {
                                     for (int g = 0; g < me.num_thread_real; g++)
                                     {
-                                        myThreads[g] = std::thread([&activeFrames, &me, &periodic_interactions, g]() {
+                                        myThreads[g] = std::thread([&activeFrames, &me, &periodic_interactions, g, &molecule_start, &molecule_end, &periodic_copies, &grid_list]() {
                                             for (int f = (g * me.num_frame_per_thread); f < ((g + 1) * me.num_frame_per_thread); f++)
                                             {
-                                                NearestNeighbourFinder(&activeFrames[f], &periodic_interactions, f, &me);
+                                                periodic_interactions[f].clear();
+                                                NearestNeighbourFinder2(&activeFrames[f], &periodic_interactions[f], &me, &molecule_start, &molecule_end, &periodic_copies, &grid_list);
                                             }
                                         });
                                     }
@@ -1186,10 +1317,11 @@ int main(int argc, char* argv[])
                 //divide as equally
                 for (int g = 0; g < me.num_thread_real; g++)
                 {
-                    workers.push_back(std::thread([&activeFrames, &me, &periodic_interactions, g]() {
+                    workers.push_back(std::thread([&activeFrames, &me, &periodic_interactions, g, &molecule_start, &molecule_end, &periodic_copies, &grid_list]() {
                         for (int f = (g * me.num_frame_per_thread); f < ((g + 1) * me.num_frame_per_thread); f++)
                         {
-                            NearestNeighbourFinder(&activeFrames[f], &periodic_interactions, f, &me);
+                            periodic_interactions[f].clear();
+                            NearestNeighbourFinder2(&activeFrames[f], &periodic_interactions[f], &me, &molecule_start, &molecule_end, &periodic_copies, &grid_list);
                         }
                     }));
                 }
@@ -1202,10 +1334,11 @@ int main(int argc, char* argv[])
                 //chew on whatever remains
                 for (int g = (perThread * me.num_thread_real); g < remainder; g++)
                 {
-                    workers.push_back(std::thread([&activeFrames, &me, &periodic_interactions, g]() {
+                    workers.push_back(std::thread([&activeFrames, &me, &periodic_interactions, g, &molecule_start, &molecule_end, &periodic_copies, &grid_list]() {
                         for (int f = (g * me.num_frame_per_thread); f < ((g + 1) * me.num_frame_per_thread); f++)
                         {
-                            NearestNeighbourFinder(&activeFrames[f], &periodic_interactions, f, &me);
+                            periodic_interactions[f].clear();
+                            NearestNeighbourFinder2(&activeFrames[f], &periodic_interactions[f], &me, &molecule_start, &molecule_end, &periodic_copies, &grid_list);
                         }
                     }));
                 }
