@@ -6,6 +6,7 @@
 #include <sstream>
 #include <iomanip>
 #include <iostream>
+#include <algorithm> 
 #include <string>
 #include <chrono>
 #include <thread>
@@ -17,20 +18,13 @@
 #include <libxml/tree.h>
 #include <libxml/xpath.h>
 #include <libxml/xpathInternals.h>
-#include <numeric>
-#include <algorithm>
 
 //a single frame containing coordinates data
 struct frame {
     int frame_id;
     long timestep;
     double time;
-    //15944 SOLV  HW2    52493    1.966742392    4.000388119    1.796537431
     std::vector<std::string> prefix;
-    std::vector<int> residue_number;
-    std::vector<std::string> residue_name;
-    std::vector<std::string> atom_type;
-    std::vector<int> atom_number;
     std::vector<double> x;
     std::vector<double> y;
     std::vector<double> z;
@@ -50,6 +44,7 @@ struct frame {
     double box_4_x;
     double box_4_y;
     double box_4_z;
+    //frame(): frame_id(0), timestep(0) {}
 };
 
 //struct for holding parameters needed by the program
@@ -63,8 +58,6 @@ struct params {
     int solute_count;
     std::vector<std::vector<int>> solute_molecules;
     std::vector<std::vector<int>> solutes_cog_molecules;
-    int protein_count;
-    std::vector<std::vector<int>> proteins;
     int solvent_atoms_first;
     int solvent_atoms_last;
     int solvent_dimension_expansion;
@@ -81,28 +74,32 @@ struct params {
     bool cog_write;
     bool cog_correction;
     int verbosity;
-
 };
 
-void CalculatedRDF(frame *framedata, int frame_id, params *me, std::vector<std::vector<std::vector<double>>> *backbone_dihedrals, std::vector<std::vector<int>> *backbone_dihedral_atoms)
-{ 
+//core algorithm 
+void FrameCalculation(frame *framedata, std::vector<std::vector<double>> *periodic_interactions, params *me,
+    int *molecule_start, int *molecule_end, int *periodic_copies, std::vector<std::vector<int>> *grid_list){ 
 }
 
-
-void PrintRDF(frame *framedata, int frame_id, std::vector<std::vector<std::vector<double>>> *backbone_dihedrals, gz::ogzstream &outfile) 
-{
+//write out collected data
+void WriteOut(frame *framedata, std::vector<std::vector<double>> *frame_periodic_interactions, gz::ogzstream &outfile, bool verbose) {
+    if (!outfile)
+    {
+        std::cerr << "cannot open output file" << "\n" << std::flush;
+    }
+    else 
+    {
+    }
 }
 
-//code checked 20130122: CORRECT!
+//get value in xpath
 char* XPathGetText(std::string xpath_query, xmlXPathContextPtr xpathCtx) 
 {
     xmlXPathObjectPtr xpathObj = xmlXPathEvalExpression(BAD_CAST xpath_query.c_str(), xpathCtx);
     return (char*)xmlNodeGetContent(xpathObj->nodesetval->nodeTab[0]);	
 }
 
-//code checked 20130122: CORRECT!
 //reads a references file for topology information that is needed for writting out
-//files in CNF and PDB compatible format
 void TrcReferenceFrame(std::vector<std::string> *prefix, std::string trc_reference) {
 
     std::ifstream infile(trc_reference);
@@ -139,10 +136,8 @@ void TrcReferenceFrame(std::vector<std::string> *prefix, std::string trc_referen
             }
         }
     }
-    // std::cout << "using reference file"  << std::endl;
 }
 
-//code checked 20130122: CORRECT!
 //parse parameter input file
 void ParseParamsInput(params *this_params, std::string job_id, std::string param_file) {
     //initialize libxml
@@ -209,26 +204,6 @@ void ParseParamsInput(params *this_params, std::string job_id, std::string param
         this_params->solute_count = this_params->solute_molecules.size();
         xmlXPathFreeObject(solutes);
 
-        //get the protein definition of the input file
-        xpathCtx->node = xpathObj->nodesetval->nodeTab[i];
-        //get protein definitions
-        xpath = "./dbssp/proteins/protein";
-        xmlXPathObjectPtr proteins = xmlXPathEvalExpression(BAD_CAST xpath.c_str(), xpathCtx);
-        //get all solutes
-        for (int j = 0; j < proteins->nodesetval->nodeNr; j++)
-        {
-            std::vector<int> temp;
-            xpathCtx->node = proteins->nodesetval->nodeTab[j];
-            //get first atom of solute
-            temp.push_back(atoi(XPathGetText("./@first_atom", xpathCtx)));
-            //get last atom of solute
-            temp.push_back(atoi(XPathGetText("./@last_atom", xpathCtx)));
-            this_params->proteins.push_back(temp);
-            temp.clear();
-        };
-        this_params->protein_count = this_params->proteins.size();
-        xmlXPathFreeObject(proteins);
-
         //read the variables section
         xpathCtx->node = xpathObj->nodesetval->nodeTab[i];
         //get number of frames per thread
@@ -240,9 +215,9 @@ void ParseParamsInput(params *this_params, std::string job_id, std::string param
             this_params->num_thread = std::thread::hardware_concurrency();
         }
         //get multiplier for thread
-        if (atoi(XPathGetText("./variables/number_of_threads_multiplier", xpathCtx)) <= 0)
+        if (atoi(XPathGetText("./variables/number_of_threads_multiplier", xpathCtx)) <= 1)
         {            
-            this_params->num_thread_real = this_params->num_thread * 1;
+            this_params->num_thread_real = this_params->num_thread;
         }
         else 
         {        
@@ -272,6 +247,7 @@ void ParseParamsInput(params *this_params, std::string job_id, std::string param
         this_params->outfilename = XPathGetText("./output/filename_prefix", xpathCtx);
         this_params->output_fragment_skipframes = atoi(XPathGetText("./output/frame_interval", xpathCtx));
         this_params->output_fragment_skiptime = atof(XPathGetText("./output/time_interval", xpathCtx));
+        this_params->verbosity = atoi(XPathGetText("./output/verbosity", xpathCtx));        
     }
 
     //clean up
@@ -280,7 +256,7 @@ void ParseParamsInput(params *this_params, std::string job_id, std::string param
     xmlFreeDoc(doc);
 }
 
-//code checked 20130122: CORRECT!
+//parses the genbox block
 void GenboxParser(frame *currentFrame, int genBox_counter, std::string line) 
 {
     switch (genBox_counter)
@@ -311,7 +287,7 @@ void GenboxParser(frame *currentFrame, int genBox_counter, std::string line)
     }
 }
 
-//code checked 20130122: CORRECT!
+//parses the position block
 void PositionBlockParser(params &me, std::string &line, int positionBlock_counter, std::vector<std::string> *prefix, std::vector<double> *x, std::vector<double> *y, std::vector<double> *z) 
 {
     if (me.informat == "trc")
@@ -320,7 +296,7 @@ void PositionBlockParser(params &me, std::string &line, int positionBlock_counte
         (*y)[positionBlock_counter] = std::stod(line.substr(15,15));
         (*z)[positionBlock_counter] = std::stod(line.substr(30,15));
     }
-    if (me.informat == "cnf")
+    else if (me.informat == "cnf")
     {
         (*prefix)[positionBlock_counter] = line.substr(0,24);
         (*x)[positionBlock_counter] = std::stod(line.substr(25,15));
@@ -341,7 +317,6 @@ int main(int argc, char* argv[])
 #ifdef DEBUG
     std::cout << "input parameters defined" << std::endl;
     std::cout << std::left;
-    std::cout << "  distance cut-off                : " << me.distance_cut_off << std::endl;
     std::cout << "  input format                    : " << me.informat << std::endl;
     std::cout << "  input files                     : " << std::endl;
     for (unsigned int i = 0; i < me.input_files.size(); i++)
@@ -369,23 +344,63 @@ int main(int argc, char* argv[])
     std::vector<frame> activeFrames (activeFrame_count);
     std::vector<frame> activeFramesCopy (activeFrame_count);
 
-    //performance log
+    //holds the results
+    //std::vector<std::vector<std::vector<double>>> periodic_interactions (activeFrame_count);
+    //std::vector<std::vector<std::vector<double>>> periodic_interactionsCopy (activeFrame_count);
+
+    //performance log - starting time
     auto start = std::chrono::system_clock::now();
 
     //only use the first TITLE block found
     bool firstPass = true;
 
     //frame counter which can be used for skipping frames
-    int frame_counter = 0;
+    int frame_counter = 0, s = 0, molecule_start = 0, molecule_end = 0, px = 0, py = 0, pz = 0;
     double frame_time = 0;
     bool processThisFrame = false;
+
+    //dimension expansion factor
+    int periodic_copies = 1;
+
+    //get end and start of search of the protein atoms
+    for (s = 0; s < me.solute_count; s++)
+    {
+        //define first atom, last atom and number of periodic copies of a solute molecule
+        if (s == 0)
+        {
+            molecule_start = me.solute_molecules[s][0];
+        }
+        if (s == (me.solute_count - 1))
+        {
+            molecule_end = me.solute_molecules[s][1];
+        }       
+    }
+
+    //create a predefined grid list for the search ignoring the center grid
+    std::vector<std::vector<int>> grid_list (3, std::vector<int>(pow((periodic_copies * 2) + 1, 3)));
+    for (px = 0-periodic_copies; px <= periodic_copies; px++)
+    {
+        for (py = 0-periodic_copies; py <= periodic_copies; py++)
+        {
+            for (pz = 0-periodic_copies; pz <= periodic_copies; pz++)
+            {
+                //remove this if statement to include center grid
+                if (!(px==0 && py==0 && pz==0))
+                {
+                    grid_list[0].push_back(px);
+                    grid_list[1].push_back(py);
+                    grid_list[2].push_back(pz);
+                }
+            }
+        }
+    }
 
     //position block array size
     std::vector<std::string> prefix (me.atomrecords);
     std::vector<double> x (me.atomrecords);
     std::vector<double> y (me.atomrecords);
     std::vector<double> z (me.atomrecords);
-    
+
 #ifdef DEBUG
     std::cout << "--->atom records c++ vectors initialized" << std::endl;
 #endif // DEBUG
@@ -403,6 +418,7 @@ int main(int argc, char* argv[])
     //determine output filename
     gz::ogzstream outfile;
     outfile.open((me.outfilename + ".gz").c_str(), std::ios_base::out);
+    outfile << std::fixed;
 
     //output thread
     std::thread outfileThread = std::thread([](){return 0;});
@@ -413,7 +429,6 @@ int main(int argc, char* argv[])
 
     //process the trajectory files sequentially
     std::cout << "processing trajectory files: " << std::endl;
-
     for (unsigned int i = 0; i < me.input_files.size(); i++)
     {
         std::cout << "  " << me.input_files[i] << std::endl;
@@ -422,18 +437,18 @@ int main(int argc, char* argv[])
         gz::igzstream file(me.input_files[i].c_str());
 
         //boolean specifying current active block
-        bool isTitleBlock, isTimestepBlock, isPositionBlock, isGenboxBlock = false;
+        bool isTitleBlock = false , isTimestepBlock = false, isPositionBlock = false, isGenboxBlock = false;
 
         //content holder for the blocks
-        std::string titleBlock, timestepBlock, positionBlock, genboxBlock;
+        std::string titleBlock(""), timestepBlock(""), positionBlock(""), genboxBlock("");
 
         //counters
-        unsigned int positionBlock_counter, activeFrame_counter = 0, genBox_counter = 0;
+        int positionBlock_counter = 0, activeFrame_counter = 0, genBox_counter = 0;
 
         //check if it is possible to read file
         if (!file)
         {
-            std::cerr << "cannot open otuput file" << "\n" << std::flush;
+            std::cerr << "cannot open output file" << "\n" << std::flush;
         }
         else {
 
@@ -579,11 +594,6 @@ int main(int argc, char* argv[])
                         } //what to do if end of a GENBOX block
                         if (isGenboxBlock)
                         {
-                            //whatever you want to get done right after the first pass
-                            if (firstPass)
-                            {                                
-                            }
-
                             //the first frame has been collected, it's no longer the first pass through the loops
                             firstPass = false;
 
@@ -614,10 +624,12 @@ int main(int argc, char* argv[])
                                 {
                                     for (int g = 0; g < me.num_thread_real; g++)
                                     {
-                                        myThreads[g] = std::thread([&activeFrames, &me, g]() {
+                                        //PAST THE RIGHT VARIABLES, OBJECTS, WHATEVER....
+                                        myThreads[g] = std::thread([&activeFrames, &me, g, &molecule_start, &molecule_end, &periodic_copies, &grid_list]() {
                                             for (int f = (g * me.num_frame_per_thread); f < ((g + 1) * me.num_frame_per_thread); f++)
                                             {
                                                 //DO SOMETHING
+
                                             }
                                         });
                                     }
@@ -655,11 +667,29 @@ int main(int argc, char* argv[])
                                 try 
                                 {
                                     activeFramesCopy = activeFrames;
-                                    outfileThread = std::thread([&activeFramesCopy, &me, &outfile]()
+                                    //PAST THE RIGHT VARIABLES, OBJECTS, WHATEVER....
+                                    outfileThread = std::thread([&activeFramesCopy, &me, &outfile, &molecule_end]()
                                     {
+                                        //DO SOMETHING
                                         for (int g = 0; g < activeFramesCopy.size(); g++)
                                         {
-                                            //DO SOMETHING
+                                            //outfile << "TIMESTEP" << "\n";
+                                            //outfile << " " << std::setw(17) << std::setprecision(0) << activeFramesCopy[g].timestep << " " << std::setw(19) << std::fixed << std::setprecision(9) << activeFramesCopy[g].time << "\n";
+                                            //outfile << "END" << "\n";
+                                            //outfile << "POSITION" << "\n";
+                                            //for (int h = 0; h < molecule_end; h++)
+                                            //{
+                                            //    outfile << activeFramesCopy[g].prefix[h] << " " << std::setw(14) << activeFramesCopy[g].x[h] << " " << std::setw(14) << activeFramesCopy[g].y[h] << " " << std::setw(14) << activeFramesCopy[g].z[h] << "\n";
+                                            //}
+                                            //outfile << "END" << "\n";                                            
+                                            //outfile << "GENBOX" << "\n";
+                                            //outfile << " " << activeFramesCopy[g].boxtype << "\n";
+                                            //outfile << std::fixed << std::setprecision(9);
+                                            //outfile << " " << std::setw(14) << activeFramesCopy[g].box_length_x << " " << std::setw(14) << activeFramesCopy[g].box_length_y << " " << std::setw(14) << activeFramesCopy[g].box_length_z << "\n";
+                                            //outfile << " " << std::setw(14) << activeFramesCopy[g].box_angle_x << " " << std::setw(14) << activeFramesCopy[g].box_angle_y << " " << std::setw(14) << activeFramesCopy[g].box_angle_z << "\n";
+                                            //outfile << " " << std::setw(14) << activeFramesCopy[g].box_3_x << " " << std::setw(14) << activeFramesCopy[g].box_3_y << " " << std::setw(14) << activeFramesCopy[g].box_3_z << "\n";
+                                            //outfile << " " << std::setw(14) << activeFramesCopy[g].box_4_x << " " << std::setw(14) << activeFramesCopy[g].box_4_y << " " << std::setw(14) << activeFramesCopy[g].box_4_z << "\n";
+                                            //outfile << "END" << "\n" << std::flush;
                                         }
                                     });
                                 }
@@ -736,7 +766,8 @@ int main(int argc, char* argv[])
                 //divide as equally
                 for (int g = 0; g < me.num_thread_real; g++)
                 {
-                    workers.push_back(std::thread([&activeFrames, &me, g]() {
+                    //PAST THE RIGHT VARIABLES, OBJECTS, WHATEVER....
+                    workers.push_back(std::thread([&activeFrames, &me, g, &molecule_start, &molecule_end, &periodic_copies, &grid_list]() {
                         for (int f = (g * me.num_frame_per_thread); f < ((g + 1) * me.num_frame_per_thread); f++)
                         {
                             //DO SOMETHING
@@ -752,7 +783,8 @@ int main(int argc, char* argv[])
                 //chew on whatever remains
                 for (int g = (perThread * me.num_thread_real); g < remainder; g++)
                 {
-                    workers.push_back(std::thread([&activeFrames, &me, g]() {
+                    //PAST THE RIGHT VARIABLES, OBJECTS, WHATEVER....
+                    workers.push_back(std::thread([&activeFrames, &me, g, &molecule_start, &molecule_end, &periodic_copies, &grid_list]() {
                         for (int f = (g * me.num_frame_per_thread); f < ((g + 1) * me.num_frame_per_thread); f++)
                         {
                             //DO SOMETHING
@@ -771,8 +803,25 @@ int main(int argc, char* argv[])
                 }
 
                 for (int g = 0; g < activeFrame_counter; g++)
-                {
+                {                    
                     //DO SOMETHING
+                    //outfile << "TIMESTEP" << "\n";
+                    //outfile << " " << std::setw(17) << std::setprecision(0) << activeFrames[g].timestep << " " << std::setw(19) << std::fixed << std::setprecision(9) << activeFrames[g].time << "\n";
+                    //outfile << "END" << "\n";
+                    //outfile << "POSITION" << "\n";
+                    //for (int h = 0; h < molecule_end; h++)
+                    //{
+                    //    outfile << activeFrames[g].prefix[h] << " " << std::setw(14) << activeFrames[g].x[h] << " " << std::setw(14) << activeFrames[g].y[h] << " " << std::setw(14) << activeFrames[g].z[h] << "\n";
+                    //}
+                    //outfile << "END" << "\n";                                            
+                    //outfile << "GENBOX" << "\n";
+                    //outfile << " " << activeFrames[g].boxtype << "\n";
+                    //outfile << std::fixed << std::setprecision(9);
+                    //outfile << " " << std::setw(14) << activeFrames[g].box_length_x << " " << std::setw(14) << activeFrames[g].box_length_y << " " << std::setw(14) << activeFrames[g].box_length_z << "\n";
+                    //outfile << " " << std::setw(14) << activeFrames[g].box_angle_x << " " << std::setw(14) << activeFrames[g].box_angle_y << " " << std::setw(14) << activeFrames[g].box_angle_z << "\n";
+                    //outfile << " " << std::setw(14) << activeFrames[g].box_3_x << " " << std::setw(14) << activeFrames[g].box_3_y << " " << std::setw(14) << activeFrames[g].box_3_z << "\n";
+                    //outfile << " " << std::setw(14) << activeFrames[g].box_4_x << " " << std::setw(14) << activeFrames[g].box_4_y << " " << std::setw(14) << activeFrames[g].box_4_z << "\n";
+                    //outfile << "END" << "\n" << std::flush;
                 }
             }
             else

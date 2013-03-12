@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<me>
+  <job type="dmov" id="1">
+    <topology>
+      <atom_records_count>39389</atom_records_count>
+      <solvent first_atom="1068" last_atom="39389" skip="1">
+        <number_of_atoms>3</number_of_atoms>
+        <dimension_expansion>2</dimension_expansion>
+      </solvent>
+      <solutes_cog>
+      </solutes_cog>
+      <solutes>
+        <solute first_atom="1" last_atom="1067" skip="0">
+          <dimension_expansion>1</dimension_expansion>
+        </solute>
+      </solutes>
+    </topology>
+    <variables>
+      <cog_write>0</cog_write>
+      <cog_correction>1</cog_correction>
+      <distance_cut_off>0.3</distance_cut_off>
+      <frames_per_thread>10</frames_per_thread>
+      <number_of_threads>8</number_of_threads>
+      <number_of_threads_multiplier>2</number_of_threads_multiplier>
+      <reference_file>ref.cnf</reference_file>
+    </variables>
+    <input>
+      <format>cnf</format>
+      <files>
+        <file>/pool/lai/secondary_projects_ana/traxlmayer_57ac2-ch3-single/traxl-57ac2-ch3-single.nosolvent.cnf.gz</file>
+      </files>
+    </input>
+    <output>
+      <filename_prefix>test.cnf</filename_prefix>
+      <frames_per_file>0</frames_per_file>
+      <frame_interval>0</frame_interval>
+      <time_interval>2</time_interval>
+      <verbosity>1</verbosity>
+    </output>
+  </job>
+</me>
+~
+~
+~
