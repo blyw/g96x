@@ -71,7 +71,9 @@
     <ClCompile Include="template.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <Xml Include="sample_config.xml" />
+    <Xml Include="sample_config.xml">
+      <SubType>Designer</SubType>
+    </Xml>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

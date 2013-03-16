@@ -9,6 +9,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "dbsspX", "dbsspX\dbsspX.vcx
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "template", "template\template.vcxproj", "{9275A5AC-E929-4DBA-B91B-06B0545287D7}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "dmovX", "dmovX\dmovX.vcxproj", "{D37487B0-1B87-47CC-87D0-0D631B1070A1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -31,6 +33,10 @@ Global
 		{9275A5AC-E929-4DBA-B91B-06B0545287D7}.Debug|Win32.Build.0 = Debug|Win32
 		{9275A5AC-E929-4DBA-B91B-06B0545287D7}.Release|Win32.ActiveCfg = Release|Win32
 		{9275A5AC-E929-4DBA-B91B-06B0545287D7}.Release|Win32.Build.0 = Release|Win32
+		{D37487B0-1B87-47CC-87D0-0D631B1070A1}.Debug|Win32.ActiveCfg = Debug|Win32
+		{D37487B0-1B87-47CC-87D0-0D631B1070A1}.Debug|Win32.Build.0 = Debug|Win32
+		{D37487B0-1B87-47CC-87D0-0D631B1070A1}.Release|Win32.ActiveCfg = Release|Win32
+		{D37487B0-1B87-47CC-87D0-0D631B1070A1}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
