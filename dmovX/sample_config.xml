@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<me>
+  <job type="dmov" id="1">
+    <topology>
+      <atom_records_count>52493</atom_records_count>
+      <solutes>
+        <solute first_atom="1" last_atom="2276" skip="0">
+          <dimension_expansion>1</dimension_expansion>
+        </solute>
+        <solute first_atom="2277" last_atom="4552" skip="0">
+          <dimension_expansion>1</dimension_expansion>
+        </solute>
+      </solutes>
+    </topology>
+    <variables>
+      <frames_per_thread>1</frames_per_thread>
+      <number_of_threads>0</number_of_threads>
+      <number_of_threads_multiplier>2</number_of_threads_multiplier>
+      <reference_file>ref.cnf</reference_file>
+    </variables>
+    <analysis>
+      <dmov>
+        <jacobi max_iteration="1000000" eigenvector_correction_cut_off="0.5" />
+        <atom_groups>
+          <atom_group id="1">
+            <selection first_atom="1" last_atom="5" />
+            <selection first_atom="8" last_atom="34" />
+          </atom_group>
+          <atom_group id="2">
+            <selection first_atom="60" last_atom="67" />
+            <selection first_atom="90" last_atom="205" />
+          </atom_group>
+          <atom_group id="3">
+            <selection first_atom="327" last_atom="802" />
+            <selection first_atom="825" last_atom="888" />
+          </atom_group>
+          <atom_group id="4">
+            <selection first_atom="723" last_atom="888" />
+            <selection first_atom="1" last_atom="30" />
+          </atom_group>
+        </atom_groups>
+        <angles>
+          <angle first_group="1" second_group="2" />
+        </angles>
+        <dihedrals>
+          <dihedral first_group="2" second_group="1" third_group="0" fourth_group="0" />
+        </dihedrals>
+      </dmov>
+    </analysis>
+    <input>
+      <format>cnf</format>
+      <files>
+        <file>traxl-57ac2-b.nosolvent.cnf.gz</file>
+      </files>
+    </input>
+    <output>
+      <filename_prefix>checkbox.test2.</filename_prefix>
+      <frame_interval>0</frame_interval>
+      <time_interval>2</time_interval>
+      <verbosity>1</verbosity>
+    </output>
+  </job>
+</me>

@@ -29,6 +29,10 @@
 #include <libxml/xpath.h>
 #include <libxml/xpathInternals.h>
 
+bool sortFunction (std::vector<double> i, std::vector<double> j) { 
+    return (i[0] > j[0]); 
+}
+
 //a single frame containing coordinates data
 struct frame {
     int frame_id;
@@ -102,6 +106,11 @@ struct params {
     std::vector<std::vector<int>> dmov_angles;
     std::vector<std::vector<int>> dmov_dihedral_angles;
     std::vector<std::vector<int>> dmov_atomgroup_inclusion_type;
+    std::vector<double> dmov_write_previous_dihedral_angles;
+    std::vector<double> dmov_write_previous_angles;
+    std::vector<std::vector<double>> dmov_calc_previous_last_eigenvalvec;
+    double dmov_jacobi_max_iteration;
+    double dmov_vector_correction_cutoff;
 };
 
 //Jacobi
@@ -267,14 +276,16 @@ int Jacobi (double *a , double *d , double *v , int maxsw)
     return -1;
 }
 
-//core algorithm 
-void FrameCalculation(frame *framedata, params *me, std::vector<std::vector<double>> *eigenValVec, 
-    std::vector<double> *angles, std::vector<double> *dihedrals, std::vector<std::vector<double>> *cog){ 
+//core algorithm 1
+//calculated the center of geometry, co-variance and use the Jacobi method to determine the eigenvalues and
+//eigenvectors that defines defined atom groups.
+void FrameCalculation1(frame *framedata, params *me, std::vector<std::vector<double>> *eigenValVec, 
+    std::vector<std::vector<double>> *cog){ 
         const double pi = 3.1415926535;
 
         //find the eigenvalue and eigenvector for each specified atom group
         //and put both in a nx4 matrix
-        
+
         std::vector<std::vector<double>> frame_eigenValVec (me->dmov_atomgroup.size(), std::vector<double> (12));
         std::vector<std::vector<double>> frame_cog (me->dmov_atomgroup.size(), std::vector<double> (3));
 
@@ -397,22 +408,94 @@ void FrameCalculation(frame *framedata, params *me, std::vector<std::vector<doub
 #endif // DEBUG
 
             //jacobi
-            Jacobi(matrix, eigenvalues, eigenvectors, 100000);
+            Jacobi(matrix, eigenvalues, eigenvectors, me->dmov_jacobi_max_iteration);
 
             //output matrix
+            std::vector<std::vector<double>> test (3, std::vector<double> (4));
+            test[0][0] = eigenvalues[0];
+            test[0][1] = eigenvectors[0];
+            test[0][2] = eigenvectors[1];
+            test[0][3] = eigenvectors[2];
+            test[1][0] = eigenvalues[1];
+            test[1][1] = eigenvectors[3];
+            test[1][2] = eigenvectors[4];
+            test[1][3] = eigenvectors[5];
+            test[2][0] = eigenvalues[2];
+            test[2][1] = eigenvectors[6];
+            test[2][2] = eigenvectors[7];
+            test[2][3] = eigenvectors[8];
 
-            frame_eigenValVec[h][0] = eigenvalues[0];
-            frame_eigenValVec[h][1] = eigenvalues[1];
-            frame_eigenValVec[h][2] = eigenvalues[2];
-            frame_eigenValVec[h][3] = eigenvectors[0];
-            frame_eigenValVec[h][4] = eigenvectors[1];
-            frame_eigenValVec[h][5] = eigenvectors[2];
-            frame_eigenValVec[h][6] = eigenvectors[3];
-            frame_eigenValVec[h][7] = eigenvectors[4];
-            frame_eigenValVec[h][8] = eigenvectors[5];
-            frame_eigenValVec[h][9] = eigenvectors[6];
-            frame_eigenValVec[h][10] = eigenvectors[7];
-            frame_eigenValVec[h][11] = eigenvectors[8];
+            //sort the eigenvectors based on eigenvalues, largest eigenvalue first
+            std::stable_sort(test.begin(), test.end(), sortFunction);
+
+            //std::cout << "raw\n" << std::fixed << std::setw(14) << std::setprecision(9) 
+            //    << frame_eigenValVec[h][0] << " "
+            //    << frame_eigenValVec[h][3] << " "
+            //    << frame_eigenValVec[h][4] << " "
+            //    << frame_eigenValVec[h][5] << "\n"
+            //    << frame_eigenValVec[h][1] << " "
+            //    << frame_eigenValVec[h][6] << " "
+            //    << frame_eigenValVec[h][7] << " "
+            //    << frame_eigenValVec[h][8] << "\n"
+            //    << frame_eigenValVec[h][2] << " "
+            //    << frame_eigenValVec[h][9] << " "
+            //    << frame_eigenValVec[h][10] << " "
+            //    << frame_eigenValVec[h][11] << "\n";
+
+            //std::cout << "test\n" << std::fixed << std::setw(14) << std::setprecision(9) 
+            //    << test[0][0] << " "
+            //    << test[0][1] << " "
+            //    << test[0][2] << " "
+            //    << test[0][3] << "\n"
+            //    << test[1][0] << " "
+            //    << test[1][1] << " "
+            //    << test[1][2] << " "
+            //    << test[1][3] << "\n"
+            //    << test[2][0] << " "
+            //    << test[2][1] << " "
+            //    << test[2][2] << " "
+            //    << test[2][3] << "\n";
+
+            frame_eigenValVec[h][0] = test[0][0];
+            frame_eigenValVec[h][1] = test[0][1]*-1;
+            frame_eigenValVec[h][2] = test[0][2]*-1;
+            frame_eigenValVec[h][3] = test[0][3]*-1;
+            frame_eigenValVec[h][4] = test[1][0];
+            frame_eigenValVec[h][5] = test[1][1]*-1;
+            frame_eigenValVec[h][6] = test[1][2]*-1;
+            frame_eigenValVec[h][7] = test[1][3]*-1;
+            frame_eigenValVec[h][8] = test[2][0];
+            frame_eigenValVec[h][9] = test[2][1]*-1;
+            frame_eigenValVec[h][10] = test[2][2]*-1;
+            frame_eigenValVec[h][11] = test[2][3]*-1;
+
+            //std::cout << "sorted\n" << std::fixed << std::setw(14) << std::setprecision(9) 
+            //    << frame_eigenValVec[h][0] << " "
+            //    << frame_eigenValVec[h][1] << " "
+            //    << frame_eigenValVec[h][2] << " "
+            //    << frame_eigenValVec[h][3] << "\n"
+            //    << frame_eigenValVec[h][4] << " "
+            //    << frame_eigenValVec[h][5] << " "
+            //    << frame_eigenValVec[h][6] << " "
+            //    << frame_eigenValVec[h][7] << "\n"
+            //    << frame_eigenValVec[h][8] << " "
+            //    << frame_eigenValVec[h][9] << " "
+            //    << frame_eigenValVec[h][10] << " "
+            //    << frame_eigenValVec[h][11] << "\n\n";
+
+            //std::cout << "sorted\n" << std::fixed << std::setw(14) << std::setprecision(9) 
+            //    << frame_eigenValVec[h][0] << " "
+            //    << frame_eigenValVec[h][3] << " "
+            //    << frame_eigenValVec[h][4] << " "
+            //    << frame_eigenValVec[h][5] << "\n"
+            //    << frame_eigenValVec[h][1] << " "
+            //    << frame_eigenValVec[h][6] << " "
+            //    << frame_eigenValVec[h][7] << " "
+            //    << frame_eigenValVec[h][8] << "\n"
+            //    << frame_eigenValVec[h][2] << " "
+            //    << frame_eigenValVec[h][9] << " "
+            //    << frame_eigenValVec[h][10] << " "
+            //    << frame_eigenValVec[h][11] << "\n\n";
 
 #ifdef DEBUG
             std::cout << "\neigenvalues\n" <<
@@ -447,7 +530,81 @@ void FrameCalculation(frame *framedata, params *me, std::vector<std::vector<doub
         //    std::cout << std::setw(10) << std::setprecision(4) << (*eigenValVec)[h][2] << " " << std::setw(10) << std::setprecision(4) << (*eigenValVec)[h][2] << " " << std::setw(10) << std::setprecision(4) << (*eigenValVec)[h][2] << " " << std::endl;
         //}
         //std::cout << std::endl;
+}
 
+//core algorithm 2
+//correction for the sign change of vectors in principal component result
+void FrameCalculation2(params *me, std::vector<std::vector<std::vector<double>>> *eigenValVec){ 
+    //define some constants
+    const double pi = 3.1415926535;
+    const double cut_off = me->dmov_vector_correction_cutoff;
+
+    //eigenvalvec is a three dimensional std::vector frame<atom_group<eigenvalues + eigenvectors>>
+    // f {e1, v_x1, v_y1, v_z1, .....}
+    //define a reference when trying to process the first frame of the entire trajectory
+    if (me->dmov_calc_previous_last_eigenvalvec.empty())
+    { 
+        me->dmov_calc_previous_last_eigenvalvec = (*eigenValVec)[0];
+    }
+
+    //handle the first frame of a batch with respect to the last frame fo the previous batch
+    //for every define atom group
+    for (int j = 0; j < (*eigenValVec)[0].size(); j++)
+    {
+        //for each calculated eigenvector of a requested atom group
+        for (int k = 0; k < 12; k+=4)
+        {
+            //detect a sign change with respect to a preceding frame
+            int change = 
+                ((*eigenValVec)[0][j][k+1] * me->dmov_calc_previous_last_eigenvalvec[j][k+1] < 0 && std::abs((*eigenValVec)[0][j][k+1] - me->dmov_calc_previous_last_eigenvalvec[j][k+1]) > cut_off) +
+                ((*eigenValVec)[0][j][k+2] * me->dmov_calc_previous_last_eigenvalvec[j][k+2] < 0 && std::abs((*eigenValVec)[0][j][k+2] - me->dmov_calc_previous_last_eigenvalvec[j][k+2]) > cut_off) +
+                ((*eigenValVec)[0][j][k+3] * me->dmov_calc_previous_last_eigenvalvec[j][k+3] < 0 && std::abs((*eigenValVec)[0][j][k+3] - me->dmov_calc_previous_last_eigenvalvec[j][k+3]) > cut_off);
+            //correct for the sign change by *-1
+            //the vectors i.e. the main component of each principle component can change direction -180 to +0 or 0 to +180
+            if (change >= 1)
+            {
+                (*eigenValVec)[0][j][k+1] = -1 * (*eigenValVec)[0][j][k+1];
+                (*eigenValVec)[0][j][k+2] = -1 * (*eigenValVec)[0][j][k+2];
+                (*eigenValVec)[0][j][k+3] = -1 * (*eigenValVec)[0][j][k+3];
+            }
+        }
+    }
+
+    //apply the correction for the first frame of the batch too all frames in the batch
+    //for each frame
+    for (int i = 1; i < (*eigenValVec).size(); i++)
+    {
+        //for each defined atom group
+        for (int j = 0; j < (*eigenValVec)[i].size(); j++)
+        {
+            //for each calculated eigenvector of a requested atom group
+            for (int k = 0; k < 12; k+=4)
+            {
+                //detect a sign change with respect to a preceding frame
+                int change = 
+                    ((*eigenValVec)[i][j][k+1] * (*eigenValVec)[i-1][j][k+1] < 0 && std::abs((*eigenValVec)[i][j][k+1] - (*eigenValVec)[i-1][j][k+1]) > cut_off) +
+                    ((*eigenValVec)[i][j][k+2] * (*eigenValVec)[i-1][j][k+2] < 0 && std::abs((*eigenValVec)[i][j][k+2] - (*eigenValVec)[i-1][j][k+2]) > cut_off) +
+                    ((*eigenValVec)[i][j][k+3] * (*eigenValVec)[i-1][j][k+3] < 0 && std::abs((*eigenValVec)[i][j][k+3] - (*eigenValVec)[i-1][j][k+3]) > cut_off);
+                //correct for the sign change by *-1
+                //the vectors i.e. the main component of each principle component can change direction -180 to +0 or 0 to +180
+                if (change >= 1)
+                {
+                    (*eigenValVec)[i][j][k+1] = -1 * (*eigenValVec)[i][j][k+1];
+                    (*eigenValVec)[i][j][k+2] = -1 * (*eigenValVec)[i][j][k+2];
+                    (*eigenValVec)[i][j][k+3] = -1 * (*eigenValVec)[i][j][k+3];
+                }
+            }
+        }
+    }
+
+    //pass the last set of eigenvectors and eigenvalues of the last frame in this batch to the next batch processing
+    me->dmov_calc_previous_last_eigenvalvec = (*eigenValVec)[(*eigenValVec).size()-1];
+}
+
+//core algorithm 3
+void FrameCalculation3(params *me, std::vector<std::vector<double>> *eigenValVec, 
+    std::vector<double> *angles, std::vector<double> *dihedrals, std::vector<std::vector<double>> *cog){ 
+        const double pi = 3.1415926535;
         //calculated the angles or dihedrals
         //declare some shared variables
         std::vector<double> a_1 (4);
@@ -466,9 +623,13 @@ void FrameCalculation(frame *framedata, params *me, std::vector<std::vector<doub
         {
             a_1 = (*eigenValVec)[me->dmov_angles[i][0]];
             a_2 = (*eigenValVec)[me->dmov_angles[i][1]];
-            a_r = acos((a_1[0]*a_2[0] +  a_1[1]*a_2[1] +  a_1[2]*a_2[2])
+
+            a_r = acos(
+                (a_1[1]*a_2[1] +  a_1[2]*a_2[2] +  a_1[3]*a_2[3])
                 /
-                sqrt((a_1[0]*a_1[0] + a_1[1]*a_1[1] + a_1[2]*a_1[2])*(a_2[0]*a_2[0] + a_2[1]*a_2[1] + a_2[2]*a_2[2])));
+                (sqrt((a_1[1]*a_1[1] + a_1[2]*a_1[2] + a_1[3]*a_1[3]))
+                *sqrt((a_2[1]*a_2[1] + a_2[2]*a_2[2] + a_2[3]*a_2[3])))
+                )  * (180/pi);
             frame_angles.push_back(a_r);
         }
         *angles = frame_angles;
@@ -484,54 +645,58 @@ void FrameCalculation(frame *framedata, params *me, std::vector<std::vector<doub
 
                 //second vector calculated from center of geometries of two groups
                 a_2 = (*cog)[me->dmov_dihedral_angles[i][0]];            
-                a_4 = (*cog)[me->dmov_dihedral_angles[i][1]];
-                a_2[0] = a_4[0] - a_2[0];
-                a_2[1] = a_4[1] - a_2[1];
-                a_2[2] = a_4[2] - a_2[2];
+                a_3 = (*cog)[me->dmov_dihedral_angles[i][1]];
+                a_2[0] = a_3[0] - a_2[0];
+                a_2[1] = a_3[1] - a_2[1];
+                a_2[2] = a_3[2] - a_2[2];
 
                 //third vector
                 a_3 = (*eigenValVec)[me->dmov_dihedral_angles[i][1]];            
 
                 //cross-product
-                d_1[0] = a_1[1] * a_2[2] - a_1[2] * a_2[1];
-                d_1[1] = a_1[2] * a_2[0] - a_1[0] * a_2[2];
-                d_1[2] = a_1[0] * a_2[1] - a_1[1] * a_2[0];
+                d_1[0] = a_1[2] * a_2[2] - a_1[3] * a_2[1];
+                d_1[1] = a_1[3] * a_2[0] - a_1[1] * a_2[2];
+                d_1[2] = a_1[1] * a_2[1] - a_1[2] * a_2[0];
 
-                d_2[0] = a_2[1] * a_3[2] - a_2[2] * a_3[1];
-                d_2[1] = a_2[2] * a_3[0] - a_2[0] * a_3[2];
-                d_2[2] = a_2[0] * a_3[1] - a_2[1] * a_3[0];
+                d_2[0] = a_3[2] * a_2[2] - a_3[3] * a_2[1];
+                d_2[1] = a_3[3] * a_2[0] - a_3[1] * a_2[2];
+                d_2[2] = a_3[1] * a_2[1] - a_3[2] * a_2[0];
 
                 //determine the sign for the angle
                 d_s[0] = d_1[1] * d_2[2] - d_1[2] * d_2[1];
                 d_s[1] = d_1[2] * d_2[0] - d_1[0] * d_2[2];
                 d_s[2] = d_1[0] * d_2[1] - d_1[1] * d_2[0];
-                sign = d_s[0] * a_3[0] +  d_s[1] * a_3[1] +  d_s[2] * a_3[2];
+                sign = d_s[0] * a_2[0] +  d_s[1] * a_2[1] +  d_s[2] * a_2[2];
 
                 //calculate angle in degrees with correct sign
-                a_r = ((sign > 0) - (sign < 0)) * acos(
+                a_r = ((sign > 0) - (sign < 0)) * 
+                    acos(
                     (d_1[0] * d_2[0] + d_1[1] * d_2[1] + d_1[2] * d_2[2]) / (
                     sqrt(d_1[0] * d_1[0] + d_1[1] * d_1[1] + d_1[2] * d_1[2]) *
                     sqrt(d_2[0] * d_2[0] + d_2[1] * d_2[1] + d_2[2] * d_2[2])
                     )) * (180/pi);
+                //correction is done in during writing out the numbers
+                //a_r = a_r + (180*(a_r < 0 && a_r >= -180));
+                //a_r = a_r + (360*(a_r < -180 && a_r >= -360));
             }
+            //calculate everything using center of geometry
             else if (me->dmov_dihedral_angles[i][2] != -1 && me->dmov_dihedral_angles[i][3] != -1)
             {
-                //calculate everything using center of geometry
-                //first vector calculated from center of geometries of two groups
+                //(A) first vector calculated from center of geometries of two groups
                 a_1 = (*cog)[me->dmov_dihedral_angles[i][0]];            
                 a_2 = (*cog)[me->dmov_dihedral_angles[i][1]];
-                a_1[0] = a_2[0] - a_1[0];
-                a_1[1] = a_2[1] - a_1[1];
-                a_1[2] = a_2[2] - a_1[2];
+                a_1[0] = a_1[0] - a_2[0];
+                a_1[1] = a_1[1] - a_2[1];
+                a_1[2] = a_1[2] - a_2[2];
 
-                //second vector calculated from center of geometries of two groups
+                //(C) second vector calculated from center of geometries of two groups
                 a_2 = (*cog)[me->dmov_dihedral_angles[i][1]];            
-                a_4 = (*cog)[me->dmov_dihedral_angles[i][2]];
-                a_2[0] = a_4[0] - a_2[0];
-                a_2[1] = a_4[1] - a_2[1];
-                a_2[2] = a_4[2] - a_2[2];
+                a_3 = (*cog)[me->dmov_dihedral_angles[i][2]];
+                a_2[0] = a_3[0] - a_2[0];
+                a_2[1] = a_3[1] - a_2[1];
+                a_2[2] = a_3[2] - a_2[2];
 
-                //third vector calculated from center of geometries of two groups
+                //(B) third vector calculated from center of geometries of two groups
                 a_3 = (*cog)[me->dmov_dihedral_angles[i][2]];            
                 a_4 = (*cog)[me->dmov_dihedral_angles[i][3]];
                 a_3[0] = a_4[0] - a_3[0];
@@ -543,22 +708,25 @@ void FrameCalculation(frame *framedata, params *me, std::vector<std::vector<doub
                 d_1[1] = a_1[2] * a_2[0] - a_1[0] * a_2[2];
                 d_1[2] = a_1[0] * a_2[1] - a_1[1] * a_2[0];
 
-                d_2[0] = a_2[1] * a_3[2] - a_2[2] * a_3[1];
-                d_2[1] = a_2[2] * a_3[0] - a_2[0] * a_3[2];
-                d_2[2] = a_2[0] * a_3[1] - a_2[1] * a_3[0];
+                d_2[0] = a_3[1] * a_2[2] - a_3[2] * a_2[1];
+                d_2[1] = a_3[2] * a_2[0] - a_3[0] * a_2[2];
+                d_2[2] = a_3[0] * a_2[1] - a_3[1] * a_2[0];
 
                 //determine the sign for the angle
                 d_s[0] = d_1[1] * d_2[2] - d_1[2] * d_2[1];
                 d_s[1] = d_1[2] * d_2[0] - d_1[0] * d_2[2];
                 d_s[2] = d_1[0] * d_2[1] - d_1[1] * d_2[0];
-                sign = d_s[0] * a_3[0] +  d_s[1] * a_3[1] +  d_s[2] * a_3[2];
+                sign = d_s[0] * a_2[0] +  d_s[1] * a_2[1] +  d_s[2] * a_2[2];
 
                 //calculate angle in degrees with correct sign
-                a_r = ((sign > 0) - (sign < 0)) * acos(
+                a_r = ((sign > 0) - (sign < 0)) * 
+                    acos(
                     (d_1[0] * d_2[0] + d_1[1] * d_2[1] + d_1[2] * d_2[2]) / (
                     sqrt(d_1[0] * d_1[0] + d_1[1] * d_1[1] + d_1[2] * d_1[2]) *
                     sqrt(d_2[0] * d_2[0] + d_2[1] * d_2[1] + d_2[2] * d_2[2])
                     )) * (180/pi);
+                //correction is done in during writing out the numbers
+                //a_r = a_r - (360*(a_r > 0));
             }
             else
             {
@@ -578,32 +746,58 @@ void WriteOut(frame *framedata, gz::ogzstream &outfile, params *me,
                       std::cerr << "cannot open output file" << "\n" << std::flush;
                   }
                   else 
-                  {      
+                  {    
                       //std::cout << std::right << std::setw(16) << std::setprecision(0) << framedata->timestep << " " << std::setw(16) << std::fixed << std::setprecision(4) << framedata->time << " " 
                       //    << std::setprecision(9)
                       //    << framedata->prefix[0] << " " << std::setw(14) << framedata->x[0] << " " << std::setw(14) << framedata->y[0] << " " << std::setw(14) << framedata->z[0] << std::endl;
                       outfile << std::setw(16) << std::setprecision(0) << framedata->timestep << " " 
                           << std::setw(16) << std::fixed << std::setprecision(4) << framedata->time << " "
                           << std::setprecision(9);
+
+                      //writes out the eigenvalues and eigenvectors of defined atom groups
                       for (int h = 0; h < me->dmov_atomgroup.size(); h++)
                       {
-                          outfile << std::setw(16) << (*eigenValVec)[h][2] << " "
-                              << std::setw(16) << (*eigenValVec)[h][9] << " "
-                              << std::setw(16) << (*eigenValVec)[h][10] << " "
-                              << std::setw(16) << (*eigenValVec)[h][11] << " ";
+                          outfile << std::setw(16) << (*eigenValVec)[h][0] << " "
+                              << std::setw(16) << (*eigenValVec)[h][1] << " "
+                              << std::setw(16) << (*eigenValVec)[h][2] << " "
+                              << std::setw(16) << (*eigenValVec)[h][3] << " ";
                       }
+
+                      //wirte out the center or geometry of defined atom groups
                       for (int h = 0; h < me->dmov_atomgroup.size(); h++)
                       {
                           outfile << std::setw(16) << (*centerOfGeometry)[h][0] << " ";
                           outfile << std::setw(16) << (*centerOfGeometry)[h][1] << " ";
                           outfile << std::setw(16) << (*centerOfGeometry)[h][2] << " ";
                       }
+
+                      //write out requested angles of between defined atom groups
                       for (int h = 0; h < me->dmov_angles.size(); h++)
                       {
+                          //angle correction
+                          double x = (*angles)[h]- me->dmov_write_previous_angles[h];
+                          //only correct if there is a jump in the angle
+                          //(*angles)[h] = ((x > -45 ) - (x <= -45)) * (*angles)[h] + ((x < -45) * 180);
+                          //(*angles)[h] = ((x < 45 ) - (x >= 45)) * (*angles)[h] - ((x > 45) * 180);
+                          me->dmov_write_previous_angles[h] = (*angles)[h];
+
                           outfile << std::setw(16) << (*angles)[h] << " ";
                       }
+
+                      //write out requested dihedral angles of between defined atom groups
                       for (int h = 0; h < me->dmov_dihedral_angles.size(); h++)
                       {
+                          //dihedral angle correction
+                          double x = ((*dihedralAngles)[h] - me->dmov_write_previous_dihedral_angles[h]) / 360.0;
+                          // get the nearest integer of x
+                          int ix;
+                          if(x > 0) {
+                              ix = int(x + 0.5);
+                          } else {
+                              ix = int(x - 0.5);
+                          }
+                          (*dihedralAngles)[h] = (*dihedralAngles)[h] - ix * 360.0;
+                          me->dmov_write_previous_dihedral_angles[h] = (*dihedralAngles)[h];
                           outfile << std::setw(16) << (*dihedralAngles)[h] << " ";
                       }
                       outfile << "\n" << std::flush;
@@ -760,10 +954,17 @@ void ParseParamsInput(params *this_params, std::string job_id, std::string param
         };
         xmlXPathFreeObject(inputFiles);
 
-        //get dmov analysis atom groups
+        //get the Jacobi methodd parameters
         xpathCtx->node = xpathObj->nodesetval->nodeTab[i];
+        //get the maximum of iterations that the Jacobi method is allowed to performed
+        this_params->dmov_jacobi_max_iteration = atof(XPathGetText("./analysis/dmov/jacobi/@max_iteration", xpathCtx));
+        //get the cut-off value for correcting the direction of the eigenvector found by the Jacobi method
+        this_params->dmov_vector_correction_cutoff = atof(XPathGetText("./analysis/dmov/jacobi/@eigenvector_correction_cut_off", xpathCtx));
+
+        //get dmov analysis atom groups
         xpath = "./analysis/dmov/atom_groups/atom_group";
-        xmlXPathObjectPtr atom_groups = xmlXPathEvalExpression(BAD_CAST xpath.c_str(), xpathCtx);
+        xmlXPathObjectPtr atom_groups = xmlXPathEvalExpression(BAD_CAST xpath.c_str(), xpathCtx);        
+
         for (int j = 0; j < atom_groups->nodesetval->nodeNr; j++)
         {
             std::vector<int> temp;
@@ -1014,7 +1215,7 @@ int main(int argc, char* argv[])
     outfile << "#  analysis angles                 : " << "\n" << std::flush;
     for (unsigned int i = 0; i < me.dmov_angles.size(); i++)
     {
-        outfile << "#      angle " << std::setw(6) << i + 1 << "                : " << me.dmov_angles[i][0] << " " << me.dmov_angles[i][1] + 1 << "\n" << std::flush;
+        outfile << "#      angle " << std::setw(6) << i + 1 << "                : " << me.dmov_angles[i][0] + 1<< " " << me.dmov_angles[i][1] + 1 << "\n" << std::flush;
     }
 
     outfile << "#  analysis dihedral angles        : " << "\n" << std::flush;
@@ -1046,7 +1247,6 @@ int main(int argc, char* argv[])
         iss << "e" << i+1 << "_z";
         outfile << std::setw(16) << iss.str() << " ";
     }
-
     for (int h = 0; h < me.dmov_atomgroup.size(); h++)
     {
         iss.str("");
@@ -1320,11 +1520,32 @@ int main(int argc, char* argv[])
                                     for (int g = 0; g < me.num_thread_real; g++)
                                     {
                                         //PAST THE RIGHT VARIABLES, OBJECTS, WHATEVER....
-                                        myThreads[g] = std::thread([&activeFrames, &me, g, &eigenValVec, &angles, &dihedralAngles, &centerOfGeometry]() {
+                                        myThreads[g] = std::thread([&activeFrames, &me, g, &eigenValVec,&centerOfGeometry]() {
                                             for (int f = (g * me.num_frame_per_thread); f < ((g + 1) * me.num_frame_per_thread); f++)
                                             {
                                                 //DO SOMETHING
-                                                FrameCalculation(&activeFrames[f], &me, &eigenValVec[f], &angles[f], &dihedralAngles[f], &centerOfGeometry[f]);
+                                                FrameCalculation1(&activeFrames[f], &me, &eigenValVec[f], &centerOfGeometry[f]);
+                                            }
+                                        });
+                                    }
+                                    for (int g = 0; g < me.num_thread_real; g++)
+                                    {
+                                        myThreads[g].join();
+#ifdef DEBUG
+                                        std::cout << "--->joining thread: " << g << std::endl;
+#endif // DEBUG
+                                    }
+
+                                    FrameCalculation2(&me, &eigenValVec);
+
+                                    for (int g = 0; g < me.num_thread_real; g++)
+                                    {
+                                        //PAST THE RIGHT VARIABLES, OBJECTS, WHATEVER....
+                                        myThreads[g] = std::thread([ &me, g, &eigenValVec, &angles, &dihedralAngles, &centerOfGeometry]() {
+                                            for (int f = (g * me.num_frame_per_thread); f < ((g + 1) * me.num_frame_per_thread); f++)
+                                            {
+                                                //DO SOMETHING
+                                                FrameCalculation3(&me, &eigenValVec[f], &angles[f], &dihedralAngles[f], &centerOfGeometry[f]);
                                             }
                                         });
                                     }
@@ -1357,6 +1578,16 @@ int main(int argc, char* argv[])
                                 }
                                 catch (const std::exception &e) {
                                     std::wcout << "\nEXCEPTION (join): " << e.what() << std::endl;
+                                }
+
+                                if (me.dmov_write_previous_dihedral_angles.empty())
+                                {
+                                    me.dmov_write_previous_dihedral_angles = dihedralAngles[0];
+                                }
+
+                                if (me.dmov_write_previous_angles.empty())
+                                {
+                                    me.dmov_write_previous_angles = angles[0];
                                 }
 
                                 try 
@@ -1451,11 +1682,28 @@ int main(int argc, char* argv[])
                 for (int g = 0; g < me.num_thread_real; g++)
                 {
                     //PAST THE RIGHT VARIABLES, OBJECTS, WHATEVER....
-                    workers.push_back(std::thread([&activeFrames, &me, g, &eigenValVec, &angles, &dihedralAngles, &centerOfGeometry]() {
+                    workers.push_back(std::thread([&activeFrames, &me, g, &eigenValVec, &centerOfGeometry]() {
                         for (int f = (g * me.num_frame_per_thread); f < ((g + 1) * me.num_frame_per_thread); f++)
                         {
                             //DO SOMETHING
-                            FrameCalculation(&activeFrames[f], &me, &eigenValVec[f], &angles[f], &dihedralAngles[f], &centerOfGeometry[f]);
+                            FrameCalculation1(&activeFrames[f], &me, &eigenValVec[f], &centerOfGeometry[f]);
+                        }
+                    }));
+                }
+                for (int g = 0; g < workers.size(); g++)
+                {
+                    workers[g].join();
+                }
+                workers.clear();
+                FrameCalculation2(&me, &eigenValVec);
+                for (int g = 0; g < me.num_thread_real; g++)
+                {
+                    //PAST THE RIGHT VARIABLES, OBJECTS, WHATEVER....
+                    workers.push_back(std::thread([&me, g, &eigenValVec, &angles, &dihedralAngles, &centerOfGeometry]() {
+                        for (int f = (g * me.num_frame_per_thread); f < ((g + 1) * me.num_frame_per_thread); f++)
+                        {
+                            //DO SOMETHING
+                            FrameCalculation3(&me, &eigenValVec[f], &angles[f], &dihedralAngles[f], &centerOfGeometry[f]);
                         }
                     }));
                 }
@@ -1469,11 +1717,28 @@ int main(int argc, char* argv[])
                 for (int g = (perThread * me.num_thread_real); g < remainder; g++)
                 {
                     //PAST THE RIGHT VARIABLES, OBJECTS, WHATEVER....
-                    workers.push_back(std::thread([&activeFrames, &me, g, &eigenValVec, &angles, &dihedralAngles, &centerOfGeometry]() {
+                    workers.push_back(std::thread([&activeFrames, &me, g, &eigenValVec, &centerOfGeometry]() {
                         for (int f = (g * me.num_frame_per_thread); f < ((g + 1) * me.num_frame_per_thread); f++)
                         {
                             //DO SOMETHING
-                            FrameCalculation(&activeFrames[f], &me, &eigenValVec[f], &angles[f], &dihedralAngles[f], &centerOfGeometry[f]);
+                            FrameCalculation1(&activeFrames[f], &me, &eigenValVec[f], &centerOfGeometry[f]);
+                        }
+                    }));
+                }
+                for (int g = 0; g < workers.size(); g++)
+                {
+                    workers[g].join();
+                }
+                workers.clear();
+                FrameCalculation2(&me, &eigenValVec);
+                for (int g = (perThread * me.num_thread_real); g < remainder; g++)
+                {
+                    //PAST THE RIGHT VARIABLES, OBJECTS, WHATEVER....
+                    workers.push_back(std::thread([&me, g, &eigenValVec, &angles, &dihedralAngles, &centerOfGeometry]() {
+                        for (int f = (g * me.num_frame_per_thread); f < ((g + 1) * me.num_frame_per_thread); f++)
+                        {
+                            //DO SOMETHING
+                            FrameCalculation3(&me, &eigenValVec[f], &angles[f], &dihedralAngles[f], &centerOfGeometry[f]);
                         }
                     }));
                 }
