@@ -1,5 +1,13 @@
-//#define DEBUG
+#define DEBUG
 #define POSIX
+
+//jacobi
+#define j_abs(x) (temp_abs=x)*((temp_abs>=0)*2-1)
+#define j_a(i,j) a[(j-1)*3+i-1]
+#define j_v(i,j) v[(j-1)*3+i-1]
+#define j_b(i) b[i-1]
+#define j_z(i) z[i-1]
+#define j_d(i) d[i-1]
 
 #include <iostream>
 #include <fstream>
@@ -16,6 +24,9 @@
 #include <libxml/tree.h>
 #include <libxml/xpath.h>
 #include <libxml/xpathInternals.h>
+#include <algorithm> 
+#include <numeric>
+#include <complex>
 
 //a single frame containing coordinates data
 struct frame {
@@ -48,30 +59,59 @@ struct frame {
 
 //struct for holding parameters needed by the program
 struct params {
+    //hardware parameters
     int num_thread;
     int num_frame_per_thread;
     int num_thread_real;
+
+    //output parameters
     int output_fragment_size;
     int output_fragment_skipframes;
     double output_fragment_skiptime;
+    std::string outformat;
+    std::string outfilename;
+
+    //topology parameters - solutes
     int solute_count;
     std::vector<std::vector<int>> solute_molecules;
     std::vector<std::vector<int>> solutes_cog_molecules;
+
+    //topology parameters - solvent
     int solvent_atoms_first;
     int solvent_atoms_last;
     int solvent_dimension_expansion;
     int solvent_size;
     bool solvent_skip;
-    int atomrecords;
-    double distance_cut_off;
-    std::string outformat;
+
+    //input paramters
     std::string informat;
     std::string trc_reference;
-    std::string outfilename;
     std::vector<std::string> input_files;
+
+    //frameoutX parameters
     double ref_coords[3];
     bool cog_write;
     bool cog_correction;
+    bool rotation_correction;
+
+    //shared parameters
+    int atomrecords;    
+    double distance_cut_off;
+    int verbosity;
+
+    //dmovX parameters essential parameters
+    std::vector<std::vector<int>> dmov_atomgroup;
+    std::vector<std::vector<double>> dmov_calc_previous_last_eigenvalvec;
+    //dmovX parameters data parameters
+    std::vector<std::vector<int>> dmov_angles;
+    std::vector<std::vector<int>> dmov_dihedral_angles;
+    std::vector<std::vector<int>> dmov_atomgroup_inclusion_type;
+    std::vector<double> dmov_write_previous_dihedral_angles;
+    std::vector<double> dmov_write_previous_angles;
+
+    //Jacobi method parameters
+    double jacobi_max_iteration;
+    double jacobi_vector_correction_cutoff;
 };
 
 //code checked 20130122: CORRECT!
@@ -386,120 +426,504 @@ void COGGatherer(frame *framedata, int first_atom, int last_atom, int molecule_s
     }
 }
 
-//code checked 20130122: CORRECT!
-//write out the data in either CNF or PDB compatible format
-//void WriteOutFrame(frame *framedata, gz::ogzstream &outfile, int atomrecords, std::string outfile_type, bool cog_write) {
-//    //check if it is possible to read file
-//    if (!outfile)
-//    {
-//        std::cerr << "cannot open otuput file" << "\n";
-//    }
-//    else {
-//        if (outfile_type=="cnf" || outfile_type=="trc")
-//        {
-//            outfile << "TIMESTEP" << "\n";
-//            outfile << " " << std::setw(17) << std::setprecision(0) << framedata->timestep << " " << std::setw(19) << std::fixed << std::setprecision(9) << framedata->time << "\n";
-//            outfile << "END" << "\n";
-//            outfile << "POSITION" << "\n";	
-//            outfile << std::fixed << std::setprecision(9);
-//            for (int i = 0; i < atomrecords; i++)
-//            {
-//                outfile << framedata->prefix[i] << " " << std::setw(14) << framedata->x[i] << " " << std::setw(14) << framedata->y[i] << " " << std::setw(14) << framedata->z[i] << "\n";
-//            }
-//            outfile << "END" << "\n";
-//            outfile << "GENBOX" << "\n";
-//            outfile << " " << framedata->boxtype << "\n";
-//            outfile << std::fixed << std::setprecision(9);
-//            outfile << " " << std::setw(14) << framedata->box_length_x << " " << std::setw(14) << framedata->box_length_y << " " << std::setw(14) << framedata->box_length_z << "\n";
-//            outfile << " " << std::setw(14) << framedata->box_angle_x << " " << std::setw(14) << framedata->box_angle_y << " " << std::setw(14) << framedata->box_angle_z << "\n";
-//            outfile << " " << std::setw(14) << framedata->box_3_x << " " << std::setw(14) << framedata->box_3_y << " " << std::setw(14) << framedata->box_3_z << "\n";
-//            outfile << " " << std::setw(14) << framedata->box_4_x << " " << std::setw(14) << framedata->box_4_y << " " << std::setw(14) << framedata->box_4_z << "\n";
-//            outfile << "END" << "\n";
-//        }
-//        if (outfile_type=="pdb")
-//        {
-//            //COLUMNS       DATA TYPE     FIELD         DEFINITION
-//            //--------------------------------------------------------------------------------------
-//            // 1 -  6       Record name   "REMARK"
-//            // 8 - 10       Integer       remarkNum     Remark  number. It is not an error for
-//            //                                          remark n to exist in an entry when
-//            //                                          remark n-1 does not.
-//            //12 - 79       LString       empty         Left  as white space in first line
-//            //                                          of each  new remark.
-//            outfile << "REMARK    1 " << std::setw(17) << std::setprecision(0) << framedata->timestep << " " << std::setw(19) << std::fixed << std::setprecision(9) << framedata->time << "\n";  
-//
-//            //outfile << "MODEL " << std::setw(8) << "\n";
-//            outfile << "MODEL \n";
-//            //COLUMNS       DATA  TYPE    FIELD          DEFINITION
-//            //-------------------------------------------------------------
-//            // 1 -  6       Record name   "CRYST1"
-//            // 7 - 15       Real(9.3)     a              a (Angstroms).
-//            //16 - 24       Real(9.3)     b              b (Angstroms).
-//            //25 - 33       Real(9.3)     c              c (Angstroms).
-//            //34 - 40       Real(7.2)     alpha          alpha (degrees).
-//            //41 - 47       Real(7.2)     beta           beta (degrees).
-//            //48 - 54       Real(7.2)     gamma          gamma (degrees).
-//            //56 - 66       LString       sGroup         Space  group.
-//            //67 - 70       Integer       z              Z value.
-//            //CRYST1    1.000    1.000    1.000  90.00  90.00  90.00 P 1           1
-//            outfile << "CRYST " 
-//                << std::setw(9) << std::setprecision(3) << framedata->box_length_x
-//                << std::setw(9) << std::setprecision(3) << framedata->box_length_y
-//                << std::setw(9) << std::setprecision(3) << framedata->box_length_z
-//                << std::setw(7) << std::setprecision(2) << framedata->box_angle_x
-//                << std::setw(7) << std::setprecision(2) << framedata->box_angle_y
-//                << std::setw(7) << std::setprecision(2) << framedata->box_angle_z
-//                << " P 1           1"
-//                << "\n";
-//            outfile << std::fixed << std::setprecision(9);
-//            for (int i = 0; i < atomrecords; i++)
-//            {
-//                //    1 ASN   H1         1    1.021435895    2.079909498    0.623854235
-//                //ATOM      1  N   THR A   1      -0.313  18.726  33.523  1.00 21.00           N
-//                // 1 -  6        Record name   "ATOM  "
-//                // 7 - 11        Integer       serial       Atom  serial number.
-//                //13 - 16        Atom          name         Atom name.
-//                //17             Character     altLoc       Alternate location indicator.
-//                //18 - 20        Residue name  resName      Residue name.
-//                //22             Character     chainID      Chain identifier.
-//                //23 - 26        Integer       resSeq       Residue sequence number.
-//                //27             AChar         iCode        Code for insertion of residues.
-//                //31 - 38        Real(8.3)     x            Orthogonal coordinates for X in Angstroms.
-//                //39 - 46        Real(8.3)     y            Orthogonal coordinates for Y in Angstroms.
-//                //47 - 54        Real(8.3)     z            Orthogonal coordinates for Z in Angstroms.
-//                //55 - 60        Real(6.2)     occupancy    Occupancy.
-//                //61 - 66        Real(6.2)     tempFactor   Temperature  factor.
-//                //77 - 78        LString(2)    element      Element symbol, right-justified.
-//                //79 - 80        LString(2)    charge       Charge  on the atom.
-//                outfile << "ATOM  "
-//                    << std::setw(5) << framedata->prefix[i].substr(19, 5) << " "
-//                    << " " << std::setw(3) << framedata->prefix[i].substr(12, 3)
-//                    << " "
-//                    << std::setw(3) << framedata->prefix[i].substr(6, 3)
-//                    << " A"
-//                    << std::setw(4) << framedata->prefix[i].substr(1, 4)
-//                    << "    "
-//                    << std::fixed
-//                    << std::setw(8) << std::setprecision(3) << framedata->x[i] * 10
-//                    << std::setw(8) << std::setprecision(3) << framedata->y[i] * 10
-//                    << std::setw(8) << std::setprecision(3) << framedata->z[i] * 10
-//                    << std::setw(6) << std::setprecision(2) << 1.0
-//                    << std::setw(6) << std::setprecision(2) << 1.0 << "\n"                
-//                    ;
-//            }
-//            if (cog_write)
-//            {
-//                outfile << "HETATM" << std::setw(5) << atomrecords+2 << "  ZN   ZN A9999    "
-//                    << std::fixed
-//                    << std::setw(8) << std::setprecision(3) << framedata->solute_cog_x * 10
-//                    << std::setw(8) << std::setprecision(3) << framedata->solute_cog_y * 10
-//                    << std::setw(8) << std::setprecision(3) << framedata->solute_cog_z * 10
-//                    << "  1.00  0.00          ZN  \n";
-//            }
-//            outfile << "ENDMDL" << "\n";
-//        }
-//    }
-//}
+//sort function
+bool sortFunction (std::vector<double> i, std::vector<double> j) { 
+    return (i[0] > j[0]); 
+}
+
+//Jacobi method
+int Jacobi (double *a , double *d , double *v , int maxsw)
+    /* Jacobi's method for diagonalysing matrix a[0..ndim**2-1], returning
+    the eigenvalue set d[0..ndim-1] and eigenvector matrix v[0..ndim**2-1].
+    Returns the number of required rotations or -1 if unsuccessful. */
+{
+    int i = 0, j = 0, k = 0, l = 0, nrot = 0, nsweep = 0;
+    double msize = 3*3-1;
+    double b[3] = { 0, 0, 0 }, z[3] = { 0, 0, 0 };
+    double x = 0, temp_abs = 0, sum = 0, tresh = 0;
+    double g = 0, h = 0, s = 0, tau = 0, t = 0, c = 0, theta = 0;
+    double *vp[3],*xp;
+    double vtmp[3*3] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+
+    /* initialise v to identity */
+
+    for ( i = 1 ; i <= 3 ; i++ )
+        for ( j = 1 ; j <= 3 ; j++ )
+            j_v(i,j) = (i==j);
+
+    /* initialise b and d with diagonal elements and z with zero */
+
+    for ( i = 1 ; i <= 3 ; i++ ) {
+        j_d(i) = j_b(i) = j_a(i,i);
+        j_z(i) = 0.0;
+    }
+
+    for ( nsweep=1 ; nsweep <= maxsw ; nsweep++ ) {
+
+        /* sum is set to the half sum of off diagonal elements absolute value 
+        and check for convergence ( OK if underflow rounded to zero ) */
+
+        sum = 0.0;
+        for ( i = 1 ; i <= 3-1 ; i++ )
+            for ( j = i+1 ; j <= 3 ; j++ )
+                sum += j_abs(j_a(i,j));
+        if ( sum == 0.0 ) {
+
+            /* restore a matrix to its initial value */
+            for ( k=1 ; k<=3-1 ; k++ )
+                for ( l=k; l<=3 ; l++ )
+                    j_a(k,l) = j_a(l,k);
+
+            /* eigenvalue reordering */
+            for ( k=1 ; k<=3 ; k++ )
+                vp[k-1] = v+3*(k-1);
+
+            for ( k=1 ; k<=3-1 ; k++ )
+                for ( l=k+1; l<=3 ; l++ )
+                    if ( j_d(l) < j_d(k) ) {
+                        x = j_d(k);
+                        j_d(k) = j_d(l);
+                        j_d(l) = x;
+                        xp = vp[k-1];
+                        vp[k-1] = vp[l-1];
+                        vp[l-1] = xp;
+                    }
+                    for ( k=1 ; k<=3 ; k++ ) {
+                        xp = vp[k-1];
+                        for ( l=0 ; l<3 ; l++ )
+                            vtmp[3*(k-1)+l] = *(xp+l);
+                    }
+                    for ( k=1 ; k<=3*3 ; k++ )
+                        v[k-1] = vtmp[k-1];
+
+                    return nrot;
+        }
+        /* for the first three sweeps tresh <> 0 */
+
+        if ( nsweep <= 3 ) 
+            tresh = 0.2*sum/(3*3);
+        else
+            tresh = 0.0;
+
+        /* perform the systematic sweep */
+
+        for ( i = 1 ; i <= 3-1 ; i++ )
+            for ( j = i+1 ; j <= 3 ; j++ ) {
+
+                /* perform the rotations, sweeping all (i,j) off-diagonal pairs of the upper
+                triangle */
+
+                g = 100.0*j_abs(j_a(i,j));
+
+                /* after four sweeps, rotation is skipped if off-diagonal element is small */
+
+                if ( nsweep > 4 && abs(j_d(i))+g == abs(j_d(i)) &&
+                    j_abs(j_d(j))+g == j_abs(j_d(j)) )
+                    j_a(i,j) = 0.0;
+                else {
+
+                    /* rotation is then performed only if the off-diagonal element is > tresh */
+
+                    if ( j_abs(j_a(i,j)) > tresh ) {
+
+                        /* rotation */
+
+                        /* t calculation: */
+                        h = j_d(j)-j_d(i);
+                        if ( j_abs(h)+g == j_abs(h) )
+                            /* t = 1/(2*theta), to avoid numerical errors */
+                                t = j_a(i,j)/(2*h);
+                        else {
+                            /* t = sgn(theta)/(abs(theta)+sqrt(1.0+theta*theta) */
+                            theta = 0.5*h/j_a(i,j);
+                            t = 1.0/(j_abs(theta)+sqrt(1.0+theta*theta))
+                                * (2*(theta>0)-1);
+                        }
+
+                        c = 1.0/sqrt(1.0+t*t);
+                        s = t*c;
+                        tau = s/(1.0+c);
+                        h = t*j_a(i,j);
+
+                        j_z(i) -= h;
+                        j_z(j) += h;
+                        j_d(i) -= h;
+                        j_d(j) += h;
+
+                        j_a(i,j) = 0.0;
+
+                        for ( k=1 ; k <= i-1 ; k++ ) {
+                            g = j_a(k,i);
+                            h = j_a(k,j);
+                            j_a(k,i) = g-s*(h+g*tau);
+                            j_a(k,j) = h+s*(g-h*tau);
+                        }
+                        for ( k=i+1 ; k <= j-1 ; k++ ) {
+                            g = j_a(i,k);
+                            h = j_a(k,j);
+                            j_a(i,k) = g-s*(h+g*tau);
+                            j_a(k,j) = h+s*(g-h*tau);
+                        }
+                        for ( k=j+1 ; k <= 3 ; k++ ) {
+                            g = j_a(i,k);
+                            h = j_a(j,k);
+                            j_a(i,k) = g-s*(h+g*tau);
+                            j_a(j,k) = h+s*(g-h*tau);
+                        }
+
+                        for ( k=1 ; k <= 3 ; k++ ) {
+                            g = j_v(k,i);
+                            h = j_v(k,j);
+                            j_v(k,i) = g-s*(h+g*tau);
+                            j_v(k,j) = h+s*(g-h*tau);
+                        }
+
+                        nrot++;
+
+                    } /* if ... > tresh */
+                } /* if element not too small */
+            } /* rotation (i,j) done */
+            for ( i=1 ; i<=3 ; i++ ) {
+                j_d(i) = ( j_b(i) += j_z(i) );
+                j_z(i) = 0.0;
+            }
+    } /* sweep done */
+
+    /*printf ("JACOBI : error, not succeded in %d iter\n",maxsw);*/
+
+    return -1;
+}
+
+//calculated the center of geometry, co-variance and use the Jacobi method to determine the eigenvalues and
+//eigenvectors that defines defined atom groups.
+void CalculateEigenValuesVectors(frame *framedata, params *me, std::vector<std::vector<double>> *eigenValVec, 
+    std::vector<std::vector<double>> *cog){ 
+        const double pi = 3.1415926535;
+
+        //find the eigenvalue and eigenvector for each specified atom group
+        //and put both in a nx4 matrix
+        std::vector<std::vector<double>> frame_eigenValVec (me->dmov_atomgroup.size(), std::vector<double> (12));
+        std::vector<std::vector<double>> frame_cog (me->dmov_atomgroup.size(), std::vector<double> (3));
+
+        for (int h = 0; h < me->dmov_atomgroup.size(); h++)
+        {           
+            //matrix structure
+            //            0  1  2
+            // matrix  =  1  3  4
+            //            2  4  5
+            double matrix[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+            double eigenvalues[] = { 0, 0, 0 };
+            double eigenvectors[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+
+            //some more variables
+            int c = 0;
+            double *x = framedata->x.data();
+            double sum_x = 0;
+            double avg_x = 0;
+            double *y = framedata->y.data();
+            double sum_y = 0;
+            double avg_y = 0;
+            double *z = framedata->z.data();
+            double sum_z = 0;
+            double avg_z = 0;
+
+            //number of atoms in this atom group
+            c = me->dmov_atomgroup[h].size();
+            int *atoms = me->dmov_atomgroup[h].data();
+
+            //calculated center of geometry for each dimension separately
+            for (int i = 0; i < c; i++)
+            {
+                sum_x += x[atoms[i]];
+            }
+            avg_x = sum_x / c;
+
+            for (int i = 0; i < c; i++)
+            {
+                sum_y += y[atoms[i]];
+            }
+            avg_y = sum_y / c;
+
+            for (int i = 0; i < c; i++)
+            {            
+                sum_z += z[atoms[i]];
+            }
+            avg_z = sum_z / c;
+
+            //center of geometry of atom groups in this frame
+            std::vector<double> cog_temp;
+            cog_temp.push_back(avg_x);
+            cog_temp.push_back(avg_y);
+            cog_temp.push_back(avg_z);
+            frame_cog[h] = cog_temp;
+
+            for (int i = 0; i < c; i++)
+            {
+                matrix[0] += (avg_x - x[atoms[i]]) * (avg_x - x[atoms[i]]);
+            }
+
+            for (int i = 0; i < c; i++)
+            {
+                matrix[1] += (avg_x - x[atoms[i]]) * (avg_y - y[atoms[i]]);
+            }
+
+            for (int i = 0; i < c; i++)
+            {
+                matrix[2] += (avg_x - x[atoms[i]]) * (avg_z - z[atoms[i]]);
+            }
+
+            matrix[3] = matrix[1];
+
+            for (int i = 0; i < c; i++)
+            {
+                matrix[4] += (avg_y - y[atoms[i]]) * (avg_y - y[atoms[i]]);
+            }
+
+            for (int i = 0; i < c; i++)
+            {
+                matrix[5] += (avg_y - y[atoms[i]]) * (avg_z - z[atoms[i]]);
+            }
+
+            matrix[6] = matrix[2];
+
+            matrix[7] = matrix[5];
+
+            for (int i = 0; i < c; i++)
+            {
+                matrix[8] += (avg_z - z[atoms[i]]) * (avg_z - z[atoms[i]]);
+            }
+
+            for (int i = 0; i < 9; i++)
+            {
+                matrix[i] = matrix[i]/c;
+            }
+
+#ifdef DEBUG
+            std::cout << "matrix\n" <<
+                "---------------------------------\n" << 
+                std::fixed << 
+                std::setw(10) << std::setprecision(4) << matrix[0] << " " <<
+                std::setw(10) << std::setprecision(4) << matrix[1] << " " <<
+                std::setw(10) << std::setprecision(4) << matrix[2] << "\n" <<
+                std::setw(10) << std::setprecision(4) << matrix[3] << " " <<
+                std::setw(10) << std::setprecision(4) << matrix[4] << " " <<
+                std::setw(10) << std::setprecision(4) << matrix[5] << "\n" <<
+                std::setw(10) << std::setprecision(4) << matrix[6] << " " <<
+                std::setw(10) << std::setprecision(4) << matrix[7] << " " <<
+                std::setw(10) << std::setprecision(4) << matrix[8] << std::endl;
+
+            std::cout << "\ncoordinates\n" <<
+                "---------------------------------\n" << 
+                std::fixed << 
+                std::setw(10) << std::setprecision(10) << avg_x << " " <<
+                std::setw(10) << std::setprecision(10) << sum_x << "\n" <<
+                std::setw(10) << std::setprecision(10) << avg_y << " " <<
+                std::setw(10) << std::setprecision(10) << sum_y << "\n" <<
+                std::setw(10) << std::setprecision(10) << avg_z << " " <<
+                std::setw(10) << std::setprecision(10) << sum_z << std::endl;  
+#endif // DEBUG
+
+            //jacobi
+            Jacobi(matrix, eigenvalues, eigenvectors, me->jacobi_max_iteration);
+
+            //output matrix
+            std::vector<std::vector<double>> test (3, std::vector<double> (4));
+            test[0][0] = eigenvalues[0];
+            test[0][1] = eigenvectors[0];
+            test[0][2] = eigenvectors[1];
+            test[0][3] = eigenvectors[2];
+            test[1][0] = eigenvalues[1];
+            test[1][1] = eigenvectors[3];
+            test[1][2] = eigenvectors[4];
+            test[1][3] = eigenvectors[5];
+            test[2][0] = eigenvalues[2];
+            test[2][1] = eigenvectors[6];
+            test[2][2] = eigenvectors[7];
+            test[2][3] = eigenvectors[8];
+
+            //sort the eigenvectors based on eigenvalues, largest eigenvalue first
+            std::stable_sort(test.begin(), test.end(), sortFunction);
+
+            frame_eigenValVec[h][0] = test[0][0];
+            frame_eigenValVec[h][1] = test[0][1];
+            frame_eigenValVec[h][2] = test[0][2];
+            frame_eigenValVec[h][3] = test[0][3];
+            frame_eigenValVec[h][4] = test[1][0];
+            frame_eigenValVec[h][5] = test[1][1];
+            frame_eigenValVec[h][6] = test[1][2];
+            frame_eigenValVec[h][7] = test[1][3];
+            frame_eigenValVec[h][8] = test[2][0];
+            frame_eigenValVec[h][9] = test[2][1];
+            frame_eigenValVec[h][10] = test[2][2];
+            frame_eigenValVec[h][11] = test[2][3];
+
+#ifdef DEBUG
+            std::cout << "\neigenvalues\n" <<
+                "---------------------------------\n" << 
+                std::fixed << 
+                std::setw(10) << std::setprecision(4) << frame_eigenValVec[h][0] << " " <<
+                std::setw(10) << std::setprecision(4) << frame_eigenValVec[h][1] << " " <<
+                std::setw(10) << std::setprecision(4) << frame_eigenValVec[h][2] << "\n" <<
+                "\neigenvectors\n" <<
+                "---------------------------------\n" << 
+                std::setw(10) << std::setprecision(4) << frame_eigenValVec[h][3] << " " <<
+                std::setw(10) << std::setprecision(4) << frame_eigenValVec[h][4] << " " <<
+                std::setw(10) << std::setprecision(4) << frame_eigenValVec[h][5] << "\n" <<
+                std::setw(10) << std::setprecision(4) << frame_eigenValVec[h][6] << " " <<
+                std::setw(10) << std::setprecision(4) << frame_eigenValVec[h][7] << " " <<
+                std::setw(10) << std::setprecision(4) << frame_eigenValVec[h][8] << "\n" <<
+                std::setw(10) << std::setprecision(4) << frame_eigenValVec[h][9] << " " <<
+                std::setw(10) << std::setprecision(4) << frame_eigenValVec[h][10] << " " <<
+                std::setw(10) << std::setprecision(4) << frame_eigenValVec[h][11] << std::endl;  
+#endif // DEBUG
+
+        }
+        //http://www.baptiste-wicht.com/2012/03/cp11-concurrency-tutorial-part-2-protect-shared-data/
+        *eigenValVec = frame_eigenValVec;
+        *cog = frame_cog;
+}
+
+//correction for the sign change of vectors in principal component result
+void CorrectionSignEigenValuesVectors(params *me, std::vector<std::vector<std::vector<double>>> *eigenValVec){ 
+    //define some constants
+    const double pi = 3.1415926535;
+    const double cut_off = me->jacobi_vector_correction_cutoff;
+
+    //eigenvalvec is a three dimensional std::vector frame<atom_group<eigenvalues + eigenvectors>>
+    // f {e1, v_x1, v_y1, v_z1, .....}
+    //define a reference when trying to process the first frame of the entire trajectory
+    if (me->dmov_calc_previous_last_eigenvalvec.empty())
+    { 
+        me->dmov_calc_previous_last_eigenvalvec = (*eigenValVec)[0];
+    }
+
+    //handle the first frame of a batch with respect to the last frame fo the previous batch
+    //for every define atom group
+    for (int j = 0; j < (*eigenValVec)[0].size(); j++)
+    {
+        //for each calculated eigenvector of a requested atom group
+        for (int k = 0; k < 12; k+=4)
+        {
+            //detect a sign change with respect to a preceding frame
+            int change = 
+                ((*eigenValVec)[0][j][k+1] * me->dmov_calc_previous_last_eigenvalvec[j][k+1] < 0 && std::abs((*eigenValVec)[0][j][k+1] - me->dmov_calc_previous_last_eigenvalvec[j][k+1]) > cut_off) +
+                ((*eigenValVec)[0][j][k+2] * me->dmov_calc_previous_last_eigenvalvec[j][k+2] < 0 && std::abs((*eigenValVec)[0][j][k+2] - me->dmov_calc_previous_last_eigenvalvec[j][k+2]) > cut_off) +
+                ((*eigenValVec)[0][j][k+3] * me->dmov_calc_previous_last_eigenvalvec[j][k+3] < 0 && std::abs((*eigenValVec)[0][j][k+3] - me->dmov_calc_previous_last_eigenvalvec[j][k+3]) > cut_off);
+            //correct for the sign change by *-1
+            //the vectors i.e. the main component of each principle component can change direction -180 to +0 or 0 to +180
+            if (change >= 1)
+            {
+                (*eigenValVec)[0][j][k+1] = -1 * (*eigenValVec)[0][j][k+1];
+                (*eigenValVec)[0][j][k+2] = -1 * (*eigenValVec)[0][j][k+2];
+                (*eigenValVec)[0][j][k+3] = -1 * (*eigenValVec)[0][j][k+3];
+            }
+        }
+    }
+
+    //apply the correction for the first frame of the batch too all frames in the batch
+    //for each frame
+    for (int i = 1; i < (*eigenValVec).size(); i++)
+    {
+        //for each defined atom group
+        for (int j = 0; j < (*eigenValVec)[i].size(); j++)
+        {
+            //for each calculated eigenvector of a requested atom group
+            for (int k = 0; k < 12; k+=4)
+            {
+                //detect a sign change with respect to a preceding frame
+                int change = 
+                    ((*eigenValVec)[i][j][k+1] * (*eigenValVec)[i-1][j][k+1] < 0 && std::abs((*eigenValVec)[i][j][k+1] - (*eigenValVec)[i-1][j][k+1]) > cut_off) +
+                    ((*eigenValVec)[i][j][k+2] * (*eigenValVec)[i-1][j][k+2] < 0 && std::abs((*eigenValVec)[i][j][k+2] - (*eigenValVec)[i-1][j][k+2]) > cut_off) +
+                    ((*eigenValVec)[i][j][k+3] * (*eigenValVec)[i-1][j][k+3] < 0 && std::abs((*eigenValVec)[i][j][k+3] - (*eigenValVec)[i-1][j][k+3]) > cut_off);
+                //correct for the sign change by *-1
+                //the vectors i.e. the main component of each principle component can change direction -180 to +0 or 0 to +180
+                if (change >= 1)
+                {
+                    (*eigenValVec)[i][j][k+1] = -1 * (*eigenValVec)[i][j][k+1];
+                    (*eigenValVec)[i][j][k+2] = -1 * (*eigenValVec)[i][j][k+2];
+                    (*eigenValVec)[i][j][k+3] = -1 * (*eigenValVec)[i][j][k+3];
+                }
+            }
+        }
+    }
+
+    //pass the last set of eigenvectors and eigenvalues of the last frame in this batch to the next batch processing
+    me->dmov_calc_previous_last_eigenvalvec = (*eigenValVec)[(*eigenValVec).size()-1];
+}
+
+//correct for rotation
+//fits the protein onto the z-axis.
+void CorrectRotationSolute(frame *framedata, params *me, std::vector<std::vector<double>> *eigenValVec) {
+    std::vector<double> soluteEigenValVec = (*eigenValVec)[0];
+    double referenceAxis[] = { 0, 0, 1 };
+    double cp[] = { 0, 0, 0 };
+    double sign = 0;
+    double a_r = 0;
+
+    //cross-product
+    cp[0] = soluteEigenValVec[2] * referenceAxis[2] - soluteEigenValVec[3] * referenceAxis[1];
+    cp[1] = soluteEigenValVec[3] * referenceAxis[0] - soluteEigenValVec[1] * referenceAxis[2];
+    cp[2] = soluteEigenValVec[1] * referenceAxis[1] - soluteEigenValVec[2] * referenceAxis[0];
+
+    //calculated the angle
+    a_r = ((sign > 0) - (sign < 0)) * 
+        acos(
+        (cp[0] * referenceAxis[0] + cp[1] * referenceAxis[1] + cp[2] * referenceAxis[2]) / (
+        sqrt(cp[0] * cp[0] + cp[1] * cp[1] + cp[2] * cp[2]) *
+        sqrt(referenceAxis[0] * referenceAxis[0] + referenceAxis[1] * referenceAxis[1] + referenceAxis[2] * referenceAxis[2])
+        ));
+
+    //Euclidian-space formulation from 
+    //http://www.gamedev.net/page/resources/_/technical/math-and-physics/do-we-really-need-quaternions-r1199
+    double c = cos(a_r);
+    double s = sin(a_r);
+    double t = 1-c;
+
+    //calculate rotation matrix
+    double RotationMatrix[3][3] = {}; 
+    RotationMatrix[0][0] = t*cp[0]*cp[0] + c;
+    RotationMatrix[0][1] = t*cp[0]*cp[1] + s*cp[2];
+    RotationMatrix[0][2] = t*cp[0]*cp[2] - s*cp[1];
+    RotationMatrix[1][0] = t*cp[0]*cp[1] - s *cp[2];
+    RotationMatrix[1][1] = t*cp[1]*cp[1] + c;
+    RotationMatrix[1][2] = t*cp[1]*cp[2] + s*cp[0];
+    RotationMatrix[2][0] = t*cp[0]*cp[2] + s*cp[1];
+    RotationMatrix[2][1] = t*cp[1]*cp[2] + s*cp[0];
+    RotationMatrix[2][2] = t*cp[2]*cp[2] + c;
+
+    //transform all x coordinates    
+    double *x = framedata->x.data();
+    double *y = framedata->y.data();
+    double *z = framedata->z.data();
+
+    std::vector<std::vector<double>> dim_temp (3, std::vector<double> (framedata->x.size()));
+    for (int i = 0; i < framedata->x.size(); i++)
+    {
+        dim_temp[0][i] = RotationMatrix[0][0] * x[i] + 
+            RotationMatrix[0][1] * y[i] + 
+            RotationMatrix[0][2] * z[i];
+    }
+
+    //transform all y coordinates
+    for (int i = 0; i < framedata->y.size(); i++)
+    {
+        dim_temp[1][i] = RotationMatrix[1][0] * x[i] + 
+            RotationMatrix[1][1] * y[i] + 
+            RotationMatrix[1][2] * z[i];
+    }
+
+    //transform all z coordinates
+    for (int i = 0; i < framedata->z.size(); i++)
+    {
+        dim_temp[2][i] = RotationMatrix[2][0] * x[i] + 
+            RotationMatrix[2][1] * y[i] + 
+            RotationMatrix[2][2] * z[i];
+    }
+
+    framedata->x = dim_temp[0];
+    framedata->y = dim_temp[1];
+    framedata->z = dim_temp[2];
+}
 
 //code checked 20130122: CORRECT!
 //write out the data in either CNF or PDB compatible format
@@ -697,7 +1121,6 @@ void WriteOutFrame(frame *framedata, gz::ogzstream &outfile, params *me) {
     }
 }
 
-
 //code checked 20130122: CORRECT!
 char* XPathGetText(std::string xpath_query, xmlXPathContextPtr xpathCtx) 
 {
@@ -868,12 +1291,21 @@ void ParseParamsInput(params *this_params, std::string job_id, std::string param
 
         //read the variables section
         xpathCtx->node = xpathObj->nodesetval->nodeTab[i];
-        //write out cog or not
-        this_params->cog_write = atoi(XPathGetText("./variables/cog_write", xpathCtx));
+
+        //first get the frameoutX specific options
+        //write out original cog or not
+        this_params->cog_write = atoi(XPathGetText("./analysis/frameout/cog_write", xpathCtx));
         //correct by shifting cog or not
-        this_params->cog_correction = atoi(XPathGetText("./variables/cog_correction", xpathCtx));
+        this_params->cog_correction = atoi(XPathGetText("./analysis/frameout/cog_correction", xpathCtx));
         //get distance cut
-        this_params->distance_cut_off = atof(XPathGetText("./variables/distance_cut_off", xpathCtx)) * atof(XPathGetText("./variables/distance_cut_off", xpathCtx));
+        this_params->distance_cut_off = atof(XPathGetText("./analysis/frameout/distance_cut_off", xpathCtx)) * atof(XPathGetText("./analysis/frameout/distance_cut_off", xpathCtx));
+        //do rotation correction or not
+        this_params->rotation_correction = atoi(XPathGetText("./analysis/frameout/rotation_correction", xpathCtx));
+        //Jacobi maximum number of iterations
+        this_params->jacobi_max_iteration = atoi(XPathGetText("./analysis/frameout/jacobi/@max_iteration", xpathCtx));
+        //Jacobi eigenvector direction correction cut-off value
+        this_params->jacobi_vector_correction_cutoff = atof(XPathGetText("./analysis/frameout/jacobi/@eigenvector_correction_cut_off", xpathCtx));
+
         //get number of frames per thread
         this_params->num_frame_per_thread = atoi(XPathGetText("./variables/frames_per_thread", xpathCtx));
         //get number of thread
@@ -1001,6 +1433,11 @@ int main(int argc, char* argv[])
         writeAtomRecordsCount = me.atomrecords;
     }
 
+    //rotation parameters
+    std::vector<std::vector<int>> ag (1, std::vector<int> (2));
+    ag[0][0] = 0;
+    ag[0][1] = me.solute_molecules[me.solute_molecules.size()-1][1];
+    me.dmov_atomgroup = ag;
 
 #ifdef DEBUG
     std::cout << "input parameters defined" << std::endl;
@@ -1045,6 +1482,10 @@ int main(int argc, char* argv[])
     int activeFrame_count = me.num_thread_real * me.num_frame_per_thread;
     std::vector<frame> activeFrames (activeFrame_count);
     std::vector<frame> activeFramesCopy (activeFrame_count);
+
+    //eigenvalues and eigenvectors
+    std::vector<std::vector<std::vector<double>>> eigenValVec (activeFrame_count);
+    std::vector<std::vector<std::vector<double>>> centerOfGeometry (activeFrame_count);
 
     //performance log
     auto start = std::chrono::system_clock::now();
@@ -1147,20 +1588,39 @@ int main(int argc, char* argv[])
                     if (line.substr(0,6) == "TITLE")
                     {
                         isTitleBlock = true;
+
+#ifdef DEBUG
+                        std::cout << "--->    found TITLE" << std::endl;
+#endif // DEBUG
+
                     }
                     else if (line.substr(0,8) == "TIMESTEP")
                     {
                         isTimestepBlock = true;
+#ifdef DEBUG
+                        std::cout << "--->    found TIMESTEP" << std::endl;
+#endif // DEBUG
+
                     }
                     else if (line.substr(0,8) == "POSITION")
                     {
                         positionBlock_counter = 0;
                         isPositionBlock = true;
+
+#ifdef DEBUG
+                        std::cout << "--->    found POSITION" << std::endl;
+#endif // DEBUG
+
                     }
                     else if (line.substr(0,6) == "GENBOX")
                     {
                         genBox_counter = 0;
                         isGenboxBlock = true;
+
+#ifdef DEBUG
+                        std::cout << "--->    found GENBOX" << std::endl;
+#endif // DEBUG
+
                     }
                     //reset if end of the block is found
                     else if (line.substr(0,3) == "END")
@@ -1242,8 +1702,8 @@ int main(int argc, char* argv[])
                             }
                             else if (me.informat == "cnf")
                             {
-                                currentFrame.time = std::stod(timestepBlock.substr(15,15));
-                                currentFrame.timestep = std::stol(timestepBlock.substr(0,18));
+                                currentFrame.time = std::stod(timestepBlock.substr(19,38));
+                                currentFrame.timestep = std::stol(timestepBlock.substr(0,19));
                             }
 
 #ifdef DEBUG
@@ -1333,7 +1793,7 @@ int main(int argc, char* argv[])
                                 {
                                     for (int g = 0; g < me.num_thread_real; g++)
                                     {
-                                        myThreads[g] = std::thread([&activeFrames, &me, g]()
+                                        myThreads[g] = std::thread([&activeFrames, &me, g, &eigenValVec, &centerOfGeometry]()
                                         {
                                             for (int f = (g * me.num_frame_per_thread); f < ((g + 1) * me.num_frame_per_thread); f++)
                                             {
@@ -1353,6 +1813,36 @@ int main(int argc, char* argv[])
 #ifdef DEBUG
                                                 std::cout << "      threads " << g << ": solutes (COG) gathered" << std::endl;
 #endif // DEBUG
+
+                                                CalculateEigenValuesVectors(&activeFrames[f], &me, &eigenValVec[f], &centerOfGeometry[f]);
+
+#ifdef DEBUG
+                                                std::cout << "      threads " << g << ": COG correction performed" << std::endl;
+#endif // DEBUG
+
+                                            }
+                                        });					
+                                    }
+                                    for (int g = 0; g < me.num_thread_real; g++)
+                                    {
+                                        myThreads[g].join();
+#ifdef DEBUG
+                                        std::cout << "--->joining thread: " << g << std::endl;
+#endif // DEBUG
+                                    }
+#ifdef DEBUG
+                                    std::cout << "--->all thread finished successfully" << std::endl;
+#endif // DEBUG
+
+                                    CorrectionSignEigenValuesVectors(&me, &eigenValVec);
+
+                                    for (int g = 0; g < me.num_thread_real; g++)
+                                    {
+                                        myThreads[g] = std::thread([&activeFrames, &me, g, &eigenValVec, &centerOfGeometry]()
+                                        {
+                                            for (int f = (g * me.num_frame_per_thread); f < ((g + 1) * me.num_frame_per_thread); f++)
+                                            {
+                                                CorrectRotationSolute(&activeFrames[f], &me, &eigenValVec[f]);
 
                                                 //STEP 2c: gather the solvent with respect to the COG of solutes
                                                 COGGatherer(&activeFrames[f], me.solvent_atoms_first, me.solvent_atoms_last, me.solvent_size, me.solvent_dimension_expansion);
@@ -1392,9 +1882,6 @@ int main(int argc, char* argv[])
                                         std::cout << "--->joining thread: " << g << std::endl;
 #endif // DEBUG
                                     }
-#ifdef DEBUG
-                                    std::cout << "--->all thread finished successfully" << std::endl;
-#endif // DEBUG
 
                                 }
                                 catch (const std::exception &e) {
@@ -1502,18 +1989,37 @@ int main(int argc, char* argv[])
                 //divide as equally
                 for (int g = 0; g < me.num_thread_real; g++)
                 {
-                    workers.push_back(std::thread([&activeFrames, &me, g, perThread]()
+                    workers.push_back(std::thread([&activeFrames, &me, g, perThread, &eigenValVec, &centerOfGeometry]()
                     {
                         for (int f = (g * perThread); f < ( (g + 1) * perThread); f++)
                         {
                             //STEP 2a: //solute gathering
                             SoluteGatherer(&activeFrames[f], f, &me);
-
+                            
                             for (unsigned int j = 0; j < me.solutes_cog_molecules.size(); j++)
                             {
                                 //STEP 2b: gather the non-solvent with respect to the COG of solutes
                                 COGGatherer(&activeFrames[f], me.solutes_cog_molecules[j][0],  me.solutes_cog_molecules[j][1], me.solutes_cog_molecules[j][2], me.solutes_cog_molecules[j][3]);
                             }
+
+                            CalculateEigenValuesVectors(&activeFrames[f], &me, &eigenValVec[f], &centerOfGeometry[f]);
+                        }
+                    }));
+                }
+                for (int g = 0; g < workers.size(); g++)
+                {
+                    workers[g].join();
+                }
+                workers.clear();
+                CorrectionSignEigenValuesVectors(&me, &eigenValVec);
+                for (int g = 0; g < me.num_thread_real; g++)
+                {
+                    workers.push_back(std::thread([&activeFrames, &me, g, perThread, &eigenValVec, &centerOfGeometry]()
+                    {
+                        for (int f = (g * perThread); f < ( (g + 1) * perThread); f++)
+                        {
+
+                            CorrectRotationSolute(&activeFrames[f], &me, &eigenValVec[f]);
 
                             if (!me.solvent_skip)
                             {
@@ -1549,7 +2055,7 @@ int main(int argc, char* argv[])
                 //chew on whatever remains
                 for (int g = (perThread * me.num_thread_real); g < remainder; g++)
                 {
-                    workers.push_back(std::thread([&activeFrames, &me, g]()
+                    workers.push_back(std::thread([&activeFrames, &me, g, &eigenValVec, &centerOfGeometry]()
                     {
                         //STEP 2a: //solute gathering
                         SoluteGatherer(&activeFrames[g], g, &me);
@@ -1559,6 +2065,21 @@ int main(int argc, char* argv[])
                             //STEP 2b: gather the non-solvent with respect to the COG of solutes
                             COGGatherer(&activeFrames[g], me.solutes_cog_molecules[j][0],  me.solutes_cog_molecules[j][1], me.solutes_cog_molecules[j][2], me.solutes_cog_molecules[j][3]);
                         }
+
+                        CalculateEigenValuesVectors(&activeFrames[g], &me, &eigenValVec[g], &centerOfGeometry[g]);
+                    }));
+                }
+                for (int g = 0; g < workers.size(); g++)
+                {
+                    workers[g].join();
+                }
+                workers.clear(); 
+                CorrectionSignEigenValuesVectors(&me, &eigenValVec);
+                for (int g = (perThread * me.num_thread_real); g < remainder; g++)
+                {
+                    workers.push_back(std::thread([&activeFrames, &me, g, &eigenValVec, &centerOfGeometry]()
+                    {
+                        CorrectRotationSolute(&activeFrames[g], &me, &eigenValVec[g]);
 
                         if (!me.solvent_skip)
                         {
@@ -1589,6 +2110,7 @@ int main(int argc, char* argv[])
                     workers[g].join();
                 }
                 workers.clear();
+
 
                 if (outfileThread.joinable())
                 {

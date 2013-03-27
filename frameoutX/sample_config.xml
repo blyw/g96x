@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<me>
+  <job type="frameout" id="1">
+    <topology>
+      <atom_records_count>52493</atom_records_count>
+      <solvent first_atom="4662" last_atom="52493" skip="1">
+        <number_of_atoms>3</number_of_atoms>
+        <dimension_expansion>2</dimension_expansion>
+      </solvent>
+      <solutes_cog>
+        <solute first_atom="4553" last_atom="4661" skip="0">
+          <number_of_atoms>1</number_of_atoms>
+          <dimension_expansion>1</dimension_expansion>
+        </solute>
+      </solutes_cog>
+      <solutes>
+        <solute first_atom="1" last_atom="2276" skip="0">
+          <dimension_expansion>1</dimension_expansion>
+        </solute>
+        <solute first_atom="2277" last_atom="4552" skip="0">
+          <dimension_expansion>1</dimension_expansion>
+        </solute>
+      </solutes>
+    </topology>
+    <variables>
+      <frames_per_thread>10</frames_per_thread>
+      <number_of_threads>0</number_of_threads>
+      <number_of_threads_multiplier>2</number_of_threads_multiplier>
+      <reference_file>ref.cnf</reference_file>
+    </variables>
+    <analysis>
+      <frameout>
+        <jacobi max_iteration="1000000" eigenvector_correction_cut_off="0.5" />
+        <cog_write>0</cog_write>
+        <cog_correction>1</cog_correction>
+        <rotation_correction>1</rotation_correction>
+        <distance_cut_off>0.2</distance_cut_off>
+      </frameout>
+    </analysis>
+    <input>
+      <format>trc</format>
+      <files>
+        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_1.trc.gz</file>
+        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_2.trc.gz</file>
+        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_3.trc.gz</file>
+        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_4.trc.gz</file>
+        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_5.trc.gz</file>
+        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_6.trc.gz</file>
+        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_7.trc.gz</file>
+        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_8.trc.gz</file>
+        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_9.trc.gz</file>
+        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_10.trc.gz</file>
+        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_11.trc.gz</file>
+        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_12.trc.gz</file>
+        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_13.trc.gz</file>
+        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_14.trc.gz</file>
+        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_15.trc.gz</file>
+        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_16.trc.gz</file>
+        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_17.trc.gz</file>
+        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_18.trc.gz</file>
+        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_19.trc.gz</file>
+        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_20.trc.gz</file>
+      </files>
+    </input>
+    <output>
+      <filename_prefix>traxl-57ac2-b.nosolvent.X2.</filename_prefix>
+      <format>pdb</format>
+      <frames_per_file>0</frames_per_file>
+      <frame_interval>0</frame_interval>
+      <time_interval>2</time_interval>
+    </output>
+  </job>
+</me>

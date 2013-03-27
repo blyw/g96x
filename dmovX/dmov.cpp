@@ -457,17 +457,17 @@ void FrameCalculation1(frame *framedata, params *me, std::vector<std::vector<dou
             //    << test[2][3] << "\n";
 
             frame_eigenValVec[h][0] = test[0][0];
-            frame_eigenValVec[h][1] = test[0][1]*-1;
-            frame_eigenValVec[h][2] = test[0][2]*-1;
-            frame_eigenValVec[h][3] = test[0][3]*-1;
+            frame_eigenValVec[h][1] = test[0][1];
+            frame_eigenValVec[h][2] = test[0][2];
+            frame_eigenValVec[h][3] = test[0][3];
             frame_eigenValVec[h][4] = test[1][0];
-            frame_eigenValVec[h][5] = test[1][1]*-1;
-            frame_eigenValVec[h][6] = test[1][2]*-1;
-            frame_eigenValVec[h][7] = test[1][3]*-1;
+            frame_eigenValVec[h][5] = test[1][1];
+            frame_eigenValVec[h][6] = test[1][2];
+            frame_eigenValVec[h][7] = test[1][3];
             frame_eigenValVec[h][8] = test[2][0];
-            frame_eigenValVec[h][9] = test[2][1]*-1;
-            frame_eigenValVec[h][10] = test[2][2]*-1;
-            frame_eigenValVec[h][11] = test[2][3]*-1;
+            frame_eigenValVec[h][9] = test[2][1];
+            frame_eigenValVec[h][10] = test[2][2];
+            frame_eigenValVec[h][11] = test[2][3];
 
             //std::cout << "sorted\n" << std::fixed << std::setw(14) << std::setprecision(9) 
             //    << frame_eigenValVec[h][0] << " "

@@ -70,6 +70,9 @@
     <ClCompile Include="frameout.cpp" />
     <ClCompile Include="gzstream.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <Xml Include="sample_config.xml" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
