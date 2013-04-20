@@ -43,7 +43,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>..\cpp_libs\zlib-1.2.5\dll32;..\cpp_libs\libxml\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\cpp_libs\eigen\;..\cpp_libs\zlib-1.2.5\dll32;..\cpp_libs\libxml\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -71,7 +71,9 @@
     <ClCompile Include="gzstream.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <Xml Include="sample_config.xml" />
+    <Xml Include="sample_config.xml">
+      <SubType>Designer</SubType>
+    </Xml>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

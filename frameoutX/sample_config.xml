@@ -23,10 +23,10 @@
       </solutes>
     </topology>
     <variables>
-      <frames_per_thread>10</frames_per_thread>
-      <number_of_threads>0</number_of_threads>
-      <number_of_threads_multiplier>2</number_of_threads_multiplier>
-      <reference_file>ref.cnf</reference_file>
+      <frames_per_thread>1</frames_per_thread>
+      <number_of_threads>1</number_of_threads>
+      <number_of_threads_multiplier>1</number_of_threads_multiplier>
+      <reference_file>C:\Users\lai\Desktop\traj-stat\Release\ref.cnf</reference_file>
     </variables>
     <analysis>
       <frameout>
@@ -38,36 +38,17 @@
       </frameout>
     </analysis>
     <input>
-      <format>trc</format>
+      <format>cnf</format>
       <files>
-        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_1.trc.gz</file>
-        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_2.trc.gz</file>
-        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_3.trc.gz</file>
-        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_4.trc.gz</file>
-        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_5.trc.gz</file>
-        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_6.trc.gz</file>
-        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_7.trc.gz</file>
-        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_8.trc.gz</file>
-        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_9.trc.gz</file>
-        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_10.trc.gz</file>
-        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_11.trc.gz</file>
-        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_12.trc.gz</file>
-        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_13.trc.gz</file>
-        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_14.trc.gz</file>
-        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_15.trc.gz</file>
-        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_16.trc.gz</file>
-        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_17.trc.gz</file>
-        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_18.trc.gz</file>
-        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_19.trc.gz</file>
-        <file>/pool/lai/secondary_projects/traxlmayr_57ac2-b/md/traxl-54ac2-b_20.trc.gz</file>
-      </files>
+        <file>C:\Users\lai\Desktop\traj-stat\Release\traxl-57ac2-b.solvent.cnf.gz</file>
+	  </files>
     </input>
     <output>
-      <filename_prefix>traxl-57ac2-b.nosolvent.X2.</filename_prefix>
+      <filename_prefix>C:\Users\lai\Desktop\traj-stat\Release\frameout10.test.</filename_prefix>
       <format>pdb</format>
       <frames_per_file>0</frames_per_file>
       <frame_interval>0</frame_interval>
-      <time_interval>2</time_interval>
+      <time_interval>100</time_interval>
     </output>
   </job>
 </me>

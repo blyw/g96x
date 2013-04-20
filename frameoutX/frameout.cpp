@@ -1,13 +1,5 @@
-#define DEBUG
+//#define DEBUG
 #define POSIX
-
-//jacobi
-#define j_abs(x) (temp_abs=x)*((temp_abs>=0)*2-1)
-#define j_a(i,j) a[(j-1)*3+i-1]
-#define j_v(i,j) v[(j-1)*3+i-1]
-#define j_b(i) b[i-1]
-#define j_z(i) z[i-1]
-#define j_d(i) d[i-1]
 
 #include <iostream>
 #include <fstream>
@@ -24,37 +16,21 @@
 #include <libxml/tree.h>
 #include <libxml/xpath.h>
 #include <libxml/xpathInternals.h>
-#include <algorithm> 
-#include <numeric>
-#include <complex>
+#include <Eigen/Dense>
 
 //a single frame containing coordinates data
 struct frame {
     long timestep;
     double time;
     std::vector<std::string> prefix;
-    std::vector<double> x;
-    std::vector<double> y;
-    std::vector<double> z;
-    double solute_cog_x;
-    double solute_cog_y;
-    double solute_cog_z;
+    Eigen::Matrix<double, 3, Eigen::Dynamic> coordinates;
+    Eigen::Vector3d solute_cog;
     int boxtype;
-    double box_length_x;
-    double box_length_y;
-    double box_length_z;
-    double box_angle_x;
-    double box_angle_y;
-    double box_angle_z;
-    double box_3_x;
-    double box_3_y;
-    double box_3_z;
-    double box_4_x;
-    double box_4_y;
-    double box_4_z;
-    int init_shift_x;
-    int init_shift_y;
-    int init_shift_z;
+    Eigen::Vector3d box_length;
+    Eigen::Vector3d box_angle;
+    Eigen::Vector3d box_3;
+    Eigen::Vector3d box_4;
+    Eigen::Vector3i init_shift;
 };
 
 //struct for holding parameters needed by the program
@@ -73,14 +49,15 @@ struct params {
 
     //topology parameters - solutes
     int solute_count;
-    std::vector<std::vector<int>> solute_molecules;
-    std::vector<std::vector<int>> solutes_cog_molecules;
+    Eigen::Matrix<int, 4, Eigen::Dynamic> solute_molecules;
+    Eigen::Matrix<int, 5, Eigen::Dynamic> solutes_cog_molecules;
+
+    //topology parameters - ions
+    Eigen::Matrix<int, 4, Eigen::Dynamic>  ions_molecules;
+    bool ions_skip;
 
     //topology parameters - solvent
-    int solvent_atoms_first;
-    int solvent_atoms_last;
-    int solvent_dimension_expansion;
-    int solvent_size;
+    Eigen::Matrix<int, 4, 1>  solvent_molecules;
     bool solvent_skip;
 
     //input paramters
@@ -88,183 +65,156 @@ struct params {
     std::string trc_reference;
     std::vector<std::string> input_files;
 
-    //frameoutX parameters
-    double ref_coords[3];
-    bool cog_write;
-    bool cog_correction;
-    bool rotation_correction;
-
     //shared parameters
     int atomrecords;    
     double distance_cut_off;
     int verbosity;
 
-    //dmovX parameters essential parameters
-    std::vector<std::vector<int>> dmov_atomgroup;
-    std::vector<std::vector<double>> dmov_calc_previous_last_eigenvalvec;
-    //dmovX parameters data parameters
-    std::vector<std::vector<int>> dmov_angles;
-    std::vector<std::vector<int>> dmov_dihedral_angles;
-    std::vector<std::vector<int>> dmov_atomgroup_inclusion_type;
-    std::vector<double> dmov_write_previous_dihedral_angles;
-    std::vector<double> dmov_write_previous_angles;
-
-    //Jacobi method parameters
-    double jacobi_max_iteration;
-    double jacobi_vector_correction_cutoff;
+    //frameoutX parameters
+    Eigen::Vector3d ref_coords;
+    bool cog_write;
+    bool cog_correction;
+    bool gather;
 };
 
-//code checked 20130122: CORRECT!
 //simple gathering of a specified atom in frame with respect to a given coordinate
 void FirstAtomBasedBoxShifter(frame *framedata, int atom_number, params *me) {
-    double coords[3] = { 0, 0, 0 };
-    double distance_shortest = 1E20;
-    int min_shift[3] = { 0, 0, 0 };
-    double *ref_coords = me->ref_coords;
-
-    //dimension expansion factor
-    int periodic_copies = 2;
-    if (me->solute_count > 0)
+    if (me->gather)
     {
-        periodic_copies = (me->solute_molecules[0][2]+1)*2;
-    }
+        double distance_shortest = 1E20;
 
-    //shift the coordinates of the specified atom in the original framedata based on the previous frame shift
-    if (!(framedata->init_shift_x == 0 && framedata->init_shift_y == 0 && framedata->init_shift_z == 0))
-    {
-        for (int i = 0; i < framedata->x.size(); i++)
-        {        
-            framedata->x[i] = framedata->x[i] + (framedata->init_shift_x * framedata->box_length_x);
-        }
-        for (int i = 0; i < framedata->y.size(); i++)
-        {        
-            framedata->y[i] = framedata->y[i] + (framedata->init_shift_y * framedata->box_length_y);
-        }
-        for (int i = 0; i < framedata->z.size(); i++)
+        Eigen::Vector3d coords(0,0,0);
+        Eigen::Vector3i min_shift(0,0,0);
+
+        //dimension expansion factor
+        int periodic_copies = 2;
+        if (me->solute_count > 0)
         {
-            framedata->z[i] = framedata->z[i] + (framedata->init_shift_z * framedata->box_length_z);
+            periodic_copies = (me->solute_molecules(2,0)+1)*2;
         }
-    }
+        //shift the coordinates of the specified atom in the original framedata based on the previous frame shift
+        if (!(framedata->init_shift(0) == 0 && framedata->init_shift(1) == 0 && framedata->init_shift(2) == 0))
+        {
+            framedata->coordinates.colwise() += (framedata->init_shift).cast<double>().cwiseProduct(framedata->box_length);
+        }
 
-    //gather the first atom fo the frame
+        //build search grid
+        Eigen::Matrix<int, Eigen::Dynamic, Eigen::Dynamic> grid;
+        grid.resize(3, (periodic_copies*2+1)*(periodic_copies*2+1)*(periodic_copies*2+1));
+        int grid_counter = 0;
+
+        for (int x = 0-periodic_copies; x <= periodic_copies; x++)
+        {
+            for (int y = 0-periodic_copies; y <= periodic_copies; y++)
+            {
+                for (int z = 0-periodic_copies; z <= periodic_copies; z++)
+                {
+                    grid(0,grid_counter) = x;
+                    grid(1,grid_counter) = y;
+                    grid(2,grid_counter) = z;
+                    grid_counter += 1;
+                }
+            }
+        }
+
+        //gather the first atom fo the frame
+        for (int i = 0; i < grid.cols(); i++)
+        {
+            double distance = 
+                (framedata->coordinates.col(atom_number) + framedata->box_length.cwiseProduct((grid.col(i)).cast<double>()) - me->ref_coords).dot(framedata->coordinates.col(atom_number) + framedata->box_length.cwiseProduct((grid.col(i)).cast<double>()) - me->ref_coords);
+            if (distance < distance_shortest)
+            {
+                distance_shortest = distance;
+                min_shift = grid.col(i);
+            }
+        }
+
+        //shift again if first atom was shifted
+        if (!( min_shift(0) == 0 && min_shift(1) == 0 && min_shift(2) == 0))
+        {
+            framedata->coordinates.colwise() += framedata->box_length.cwiseProduct(min_shift.cast<double>());
+        }
+
+        //maybe useful for debugging?
+        framedata->init_shift = min_shift;
+    }
+}
+
+//solute gathering i.e. cluster algorithm (nearest neighbour)
+void SoluteGatherer(frame *framedata, int frameId, params *me){ // std::vector<std::vector<int>> solute_molecules, int solute_count, int frameId, int periodic_copies) {	
+    //init variables
+    double distance_shortest;
+    Eigen::Vector3i min_shift(0,0,0);
+
+    //cut-off is derived from (longest bond)^2
+    double cut_off = me->distance_cut_off;
+    int molecule_start, molecule_end, molecule_start_previous, periodic_copies;
+
+    //for center of geometry of all solute molecules calculation
+    Eigen::Vector3d coordinates_sum(0,0,0);
+
+    //build search grid
+    Eigen::Matrix<int, Eigen::Dynamic, Eigen::Dynamic> grid;
+    grid.resize(3, (periodic_copies*2+1)*(periodic_copies*2+1)*(periodic_copies*2+1));
+    int grid_counter = 0;
     for (int x = 0-periodic_copies; x <= periodic_copies; x++)
     {
         for (int y = 0-periodic_copies; y <= periodic_copies; y++)
         {
             for (int z = 0-periodic_copies; z <= periodic_copies; z++)
             {
-                double distance =
-                    (((framedata->x[atom_number] + x * framedata->box_length_x) - ref_coords[0]) * ((framedata->x[atom_number] + x * framedata->box_length_x) - ref_coords[0])) +
-                    (((framedata->y[atom_number] + y * framedata->box_length_y) - ref_coords[1]) * ((framedata->y[atom_number] + y * framedata->box_length_y) - ref_coords[1])) +
-                    (((framedata->z[atom_number] + z * framedata->box_length_z) - ref_coords[2]) * ((framedata->z[atom_number] + z * framedata->box_length_z) - ref_coords[2]));
-                if (distance < distance_shortest)
-                {
-                    distance_shortest = distance;
-                    min_shift[0] = x;
-                    min_shift[1] = y;
-                    min_shift[2] = z;
-                }
+                grid(0,grid_counter) = x;
+                grid(1,grid_counter) = y;
+                grid(2,grid_counter) = z;
+                grid_counter += 1;
             }
         }
     }
-
-    //shift again if first atom was shifted
-    if (!( min_shift[0] == 0 && min_shift[1] == 0 && min_shift[2] == 0))
-    {
-        for (int i = 0; i < framedata->x.size(); i++)
-        {        
-            framedata->x[i] = framedata->x[i] + (min_shift[0] * framedata->box_length_x);
-        }
-        for (int i = 0; i < framedata->y.size(); i++)
-        {        
-            framedata->y[i] = framedata->y[i] + (min_shift[1] * framedata->box_length_y);
-        }
-        for (int i = 0; i < framedata->z.size(); i++)
-        {
-            framedata->z[i] = framedata->z[i] + (min_shift[2] * framedata->box_length_z);
-        }
-    }
-
-    //maybe useful for debugging?
-    framedata->init_shift_x = min_shift[0];
-    framedata->init_shift_y = min_shift[1];
-    framedata->init_shift_z = min_shift[2];
-}
-
-//code checked 20130122: CORRECT!
-//solute gathering i.e. cluster algorithm (nearest neighbour)
-void SoluteGatherer(frame *framedata, int frameId, params *me){ // std::vector<std::vector<int>> solute_molecules, int solute_count, int frameId, int periodic_copies) {	
-    //init variables
-    double distance_shortest;
-    int min_shift[3] = { 0, 0, 0 };
-    //cut-off is derived from (longest bond)^2
-    double cut_off = me->distance_cut_off;
-    int molecule_start, molecule_end, molecule_start_previous, periodic_copies;
-
-    //for center of geometry of all solute molecules calculation
-    double x_sum = 0;
-    double y_sum = 0;
-    double z_sum = 0;
 
     //cross-reference gathering
     for (int s = 0; s < me->solute_count; s++)
     {
         //define first atom, last atom and number of periodic copies of a solute molecule
-        molecule_start = me->solute_molecules[s][0];
-        molecule_end = me->solute_molecules[s][1];
-        periodic_copies = me->solute_molecules[s][2];
+        molecule_start = me->solute_molecules(0,s);
+        molecule_end = me->solute_molecules(1,s);
+        periodic_copies = me->solute_molecules(2,s);
 
         //the first atom in a solute molecule which is not the first solute molecule is 
         //gather with respect to all atoms of the previous solute molecule
         if (s > 0)
         { 
             distance_shortest = 1E20;
-            min_shift[0] = 0;
-            min_shift[1] = 0;
-            min_shift[2] = 0;
+            min_shift.Zero();
             //molecule_start_previous is re-defined each time a solute molecule is gathered
             //molecule_start - 1 --> array index of the first atom of the current solute molecule
             //molecule_start - 2 --> array index of the last atom of the previous solute molecule
             for (int i = (molecule_start - 2); i >= (molecule_start_previous - 1); i--)
             {	
                 //gather
-                for (int x = 0-periodic_copies; x <= periodic_copies; x++)
+                for (int g = 0; g < grid.cols(); g++)
                 {
-                    for (int y = 0-periodic_copies; y <= periodic_copies; y++)
+                    //defined cutt-off use to prevent unnecessary looping through the full list
+                    if (distance_shortest <= cut_off)
                     {
-                        for (int z = 0-periodic_copies; z <= periodic_copies; z++)
-                        {
-                            //defined cutt-off use to prevent unnecessary looping through the full list
-                            if (distance_shortest <= cut_off)
-                            {
-                                break;
-                            }
+                        break;
+                    }
 
-                            double distance =
-                                (((framedata->x[molecule_start - 1] + x * framedata->box_length_x) - framedata->x[i]) * ((framedata->x[molecule_start - 1] + x * framedata->box_length_x) - framedata->x[i])) +
-                                (((framedata->y[molecule_start - 1] + y * framedata->box_length_y) - framedata->y[i]) * ((framedata->y[molecule_start - 1] + y * framedata->box_length_y) - framedata->y[i])) +
-                                (((framedata->z[molecule_start - 1] + z * framedata->box_length_z) - framedata->z[i]) * ((framedata->z[molecule_start - 1] + z * framedata->box_length_z) - framedata->z[i]));
-                            if (distance < distance_shortest)
-                            {
-                                distance_shortest = distance;
-                                min_shift[0] = x;
-                                min_shift[1] = y;
-                                min_shift[2] = z;
-                            }
-                        }
+                    double distance = 
+                        (framedata->coordinates.col(molecule_start - 1) + framedata->box_length.cwiseProduct(grid.col(g).cast<double>()) - framedata->coordinates.col(i)).dot(
+                        framedata->coordinates.col(molecule_start - 1) + framedata->box_length.cwiseProduct(grid.col(g).cast<double>()) - framedata->coordinates.col(i));
+                    if (distance < distance_shortest)
+                    {
+                        distance_shortest = distance;
+                        min_shift = grid.col(g);
                     }
                 }
             }
             //shift the coordinates of the atom in the original frame
-            framedata->x[molecule_start - 1] = framedata->x[molecule_start - 1] + (min_shift[0] * framedata->box_length_x);
-            framedata->y[molecule_start - 1] = framedata->y[molecule_start - 1] + (min_shift[1] * framedata->box_length_y);
-            framedata->z[molecule_start - 1] = framedata->z[molecule_start - 1] + (min_shift[2] * framedata->box_length_z);
+            framedata->coordinates.col(molecule_start - 1) += framedata->box_length.cwiseProduct(min_shift.cast<double>());
         }
 
         //dimension sum for cog 
-        x_sum += framedata->x[molecule_start - 1];
-        y_sum += framedata->y[molecule_start - 1];
-        z_sum += framedata->z[molecule_start - 1];
+        coordinates_sum += framedata->coordinates.col(molecule_start - 1);
 
         //double xval, yval, zval;
         //gather solute molecule
@@ -272,50 +222,35 @@ void SoluteGatherer(frame *framedata, int frameId, params *me){ // std::vector<s
         {				
             //atom dependent variables that should be reset for each atom
             distance_shortest = 1E20;
-            min_shift[0] = 0;
-            min_shift[1] = 0;
-            min_shift[2] = 0;
+            min_shift.Zero();
             //reverse search from coordinate closest to already-in-list atoms of current solute molecule
             for (int j = (i - 1); j >= (molecule_start - 1); j--)
             {
                 //gather
-                for (int x = 0-periodic_copies; x <= periodic_copies; x++)
+                for (int g = 0; g < grid.cols(); g++)
                 {
-                    for (int y = 0-periodic_copies; y <= periodic_copies; y++)
+                    //defined cutt-off use to prevent unnecessary looping through the full list
+                    if (distance_shortest <= cut_off)
                     {
-                        for (int z = 0-periodic_copies; z <= periodic_copies; z++)
-                        {
-                            //defined cutt-off use to prevent unnecessary looping through the full list
-                            if (distance_shortest <= cut_off)
-                            {
-                                break;
-                            }
+                        break;
+                    }
 
-                            double distance =
-                                (((framedata->x[i] + x * framedata->box_length_x) - framedata->x[j]) * ((framedata->x[i] + x * framedata->box_length_x) - framedata->x[j])) +
-                                (((framedata->y[i] + y * framedata->box_length_y) - framedata->y[j]) * ((framedata->y[i] + y * framedata->box_length_y) - framedata->y[j])) +
-                                (((framedata->z[i] + z * framedata->box_length_z) - framedata->z[j]) * ((framedata->z[i] + z * framedata->box_length_z) - framedata->z[j]));
-                            if (distance < distance_shortest)
-                            {
-                                distance_shortest = distance;
-                                min_shift[0] = x;
-                                min_shift[1] = y;
-                                min_shift[2] = z;
-                            }
-                        }
+                    double distance = 
+                        (framedata->coordinates.col(molecule_start - 1) + framedata->box_length.cwiseProduct(grid.col(g).cast<double>()) - framedata->coordinates.col(i)).dot(
+                        framedata->coordinates.col(molecule_start - 1) + framedata->box_length.cwiseProduct(grid.col(g).cast<double>()) - framedata->coordinates.col(i));
+                    if (distance < distance_shortest)
+                    {
+                        distance_shortest = distance;
+                        min_shift = grid.col(g);
                     }
                 }
             }
 
             //shift the coordinates of the atom in the original frame	
-            framedata->x[i] = framedata->x[i] + (min_shift[0] * framedata->box_length_x);
-            framedata->y[i] = framedata->y[i] + (min_shift[1] * framedata->box_length_y);
-            framedata->z[i] = framedata->z[i] + (min_shift[2] * framedata->box_length_z);
+            framedata->coordinates.col(i) += framedata->box_length.cwiseProduct(min_shift.cast<double>());
 
             //dimension sum for cog 
-            x_sum += framedata->x[i];
-            y_sum += framedata->y[i];
-            z_sum += framedata->z[i];
+            coordinates_sum += framedata->coordinates.col(i);
         }
         //done gathering for a solute molecule
         //set reference for gathering next solute molecule
@@ -325,629 +260,121 @@ void SoluteGatherer(frame *framedata, int frameId, params *me){ // std::vector<s
     if (me->solute_count > 0)
     {
         //use this center of geometry for the entire frame
-        framedata->solute_cog_x = x_sum / molecule_end;
-        framedata->solute_cog_y = y_sum / molecule_end;
-        framedata->solute_cog_z = z_sum / molecule_end;
+        framedata->solute_cog = coordinates_sum / molecule_end;
     }
     else
     {
-        //use this center of geometry for the entire frame
-        framedata->solute_cog_x = framedata->x[0];
-        framedata->solute_cog_y = framedata->y[0];
-        framedata->solute_cog_z = framedata->z[0];
+        //use this center of geometry for the entire frame        
+        framedata->solute_cog = framedata->coordinates.col(0);
     }
-    //std::cout << frameId << std::endl;
 }
 
-//code checked 20130122: CORRECT!
 //gather solvent molecules with respect to COG of solutes
 void COGGatherer(frame *framedata, int first_atom, int last_atom, int molecule_size, int periodic_copies) {
     double distance_shortest = 1E20;
-    int min_shift[3] = { 0, 0, 0 };
+    Eigen::Vector3i min_shift(0,0,0);
     //cut-off is derived from (longest bond)^2
+    //double cut_off = me->distance_cut_off;
     double cut_off = 0.3 * 0.3;
+
+    //build search grid
+    Eigen::Matrix<int, Eigen::Dynamic, Eigen::Dynamic> grid;
+    grid.resize(3, (periodic_copies*2+1)*(periodic_copies*2+1)*(periodic_copies*2+1));
+    int grid_counter = 0;
+
+    for (int x = 0-periodic_copies; x <= periodic_copies; x++)
+    {
+        for (int y = 0-periodic_copies; y <= periodic_copies; y++)
+        {
+            for (int z = 0-periodic_copies; z <= periodic_copies; z++)
+            {
+                grid(0, grid_counter) = x;
+                grid(1, grid_counter) = y;
+                grid(2, grid_counter) = z;
+                grid_counter += 1;
+            }
+        }
+    }
 
     for (int i = first_atom - 1; i < last_atom; i+=molecule_size)
     {
         distance_shortest = 1E20;
-        min_shift[0] = 0;
-        min_shift[1] = 0;
-        min_shift[2] = 0;
+        min_shift.Zero();
 
         //gather the first atom of the solvent molecule
-        for (int x = 0-periodic_copies; x <= periodic_copies; x++)
+        for (int g = 0; g < grid.cols(); g++)
         {
-            for (int y = 0-periodic_copies; y <= periodic_copies; y++)
+            //defined cutt-off use to prevent unnecessary looping through the full list
+            double distance = 
+                (framedata->coordinates.col(i) + framedata->box_length.cwiseProduct(grid.col(g).cast<double>()) - framedata->solute_cog).dot(
+                framedata->coordinates.col(i) + framedata->box_length.cwiseProduct(grid.col(g).cast<double>()) - framedata->solute_cog);
+            if (distance < distance_shortest)
             {
-                for (int z = 0-periodic_copies; z <= periodic_copies; z++)
-                {                    
-                    double distance =
-                        (((framedata->x[i] + x * framedata->box_length_x) - framedata->solute_cog_x) * ((framedata->x[i] + x * framedata->box_length_x) - framedata->solute_cog_x)) +
-                        (((framedata->y[i] + y * framedata->box_length_y) - framedata->solute_cog_y) * ((framedata->y[i] + y * framedata->box_length_y) - framedata->solute_cog_y)) +
-                        (((framedata->z[i] + z * framedata->box_length_z) - framedata->solute_cog_z) * ((framedata->z[i] + z * framedata->box_length_z) - framedata->solute_cog_z));
-                    if (distance < distance_shortest)
-                    {
-                        distance_shortest = distance;
-                        min_shift[0] = x;
-                        min_shift[1] = y;
-                        min_shift[2] = z;
-                    }
-                }
+                distance_shortest = distance;
+                min_shift = grid.col(g);
             }
         }
+
         //shift the coordinates of the first atom in the original framedata
-        framedata->x[i] = framedata->x[i] + (min_shift[0] * framedata->box_length_x);
-        framedata->y[i] = framedata->y[i] + (min_shift[1] * framedata->box_length_y);
-        framedata->z[i] = framedata->z[i] + (min_shift[2] * framedata->box_length_z);
+        framedata->coordinates.col(i) += framedata->box_length.cwiseProduct(min_shift.cast<double>());
 
         ////gather other atoms of the solvent molecule
         for (int j = (i + 1); j < (i + molecule_size); j++)
         {
             //reset for the each additional atom in solvent molecule
             distance_shortest = 1E20;
-            min_shift[0] = 0;
-            min_shift[1] = 0;
-            min_shift[2] = 0;
+            min_shift.Zero();
 
             for (int k = i; k < j; k++)
             {   
-                for (int x = 0-periodic_copies; x <= periodic_copies; x++)
-                {
-                    for (int y = 0-periodic_copies; y <= periodic_copies; y++)
-                    {
-                        for (int z = 0-periodic_copies; z < periodic_copies; z++)
-                        {
-                            //defined cutt-off use to prevent unnecessary looping through the full list
-                            if (distance_shortest <= cut_off)
-                            {
-                                break;
-                            }
 
-                            double distance =
-                                (((framedata->x[j] + x * framedata->box_length_x) - framedata->x[k]) * ((framedata->x[j] + x * framedata->box_length_x) - framedata->x[k])) +
-                                (((framedata->y[j] + y * framedata->box_length_y) - framedata->y[k]) * ((framedata->y[j] + y * framedata->box_length_y) - framedata->y[k])) +
-                                (((framedata->z[j] + z * framedata->box_length_z) - framedata->z[k]) * ((framedata->z[j] + z * framedata->box_length_z) - framedata->z[k]));
-                            if (distance < distance_shortest)
-                            {
-                                distance_shortest = distance;
-                                min_shift[0] = x;
-                                min_shift[1] = y;
-                                min_shift[2] = z;
-                            }
-                        }
+                for (int g = 0; g < grid.cols(); g++)
+                {                   
+                    //defined cutt-off use to prevent unnecessary looping through the full list
+                    if (distance_shortest <= cut_off)
+                    {
+                        break;
+                    }
+
+                    double distance = 
+                        (framedata->coordinates.col(j) + framedata->box_length.cwiseProduct(grid.col(g).cast<double>()) - framedata->coordinates.col(k)).dot(
+                        framedata->coordinates.col(j) + framedata->box_length.cwiseProduct(grid.col(g).cast<double>()) - framedata->coordinates.col(k));
+                    if (distance < distance_shortest)
+                    {
+                        distance_shortest = distance;
+                        min_shift = grid.col(g);
                     }
                 }
             }
             //	//shift atom correctly
-            framedata->x[j] = framedata->x[j] + (min_shift[0] * framedata->box_length_x);
-            framedata->y[j] = framedata->y[j] + (min_shift[1] * framedata->box_length_y);
-            framedata->z[j] = framedata->z[j] + (min_shift[2] * framedata->box_length_z);
+            framedata->coordinates.col(j) += framedata->box_length.cwiseProduct(min_shift.cast<double>());
         }
     }
 }
 
-//sort function
-bool sortFunction (std::vector<double> i, std::vector<double> j) { 
-    return (i[0] > j[0]); 
-}
-
-//Jacobi method
-int Jacobi (double *a , double *d , double *v , int maxsw)
-    /* Jacobi's method for diagonalysing matrix a[0..ndim**2-1], returning
-    the eigenvalue set d[0..ndim-1] and eigenvector matrix v[0..ndim**2-1].
-    Returns the number of required rotations or -1 if unsuccessful. */
-{
-    int i = 0, j = 0, k = 0, l = 0, nrot = 0, nsweep = 0;
-    double msize = 3*3-1;
-    double b[3] = { 0, 0, 0 }, z[3] = { 0, 0, 0 };
-    double x = 0, temp_abs = 0, sum = 0, tresh = 0;
-    double g = 0, h = 0, s = 0, tau = 0, t = 0, c = 0, theta = 0;
-    double *vp[3],*xp;
-    double vtmp[3*3] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-
-    /* initialise v to identity */
-
-    for ( i = 1 ; i <= 3 ; i++ )
-        for ( j = 1 ; j <= 3 ; j++ )
-            j_v(i,j) = (i==j);
-
-    /* initialise b and d with diagonal elements and z with zero */
-
-    for ( i = 1 ; i <= 3 ; i++ ) {
-        j_d(i) = j_b(i) = j_a(i,i);
-        j_z(i) = 0.0;
-    }
-
-    for ( nsweep=1 ; nsweep <= maxsw ; nsweep++ ) {
-
-        /* sum is set to the half sum of off diagonal elements absolute value 
-        and check for convergence ( OK if underflow rounded to zero ) */
-
-        sum = 0.0;
-        for ( i = 1 ; i <= 3-1 ; i++ )
-            for ( j = i+1 ; j <= 3 ; j++ )
-                sum += j_abs(j_a(i,j));
-        if ( sum == 0.0 ) {
-
-            /* restore a matrix to its initial value */
-            for ( k=1 ; k<=3-1 ; k++ )
-                for ( l=k; l<=3 ; l++ )
-                    j_a(k,l) = j_a(l,k);
-
-            /* eigenvalue reordering */
-            for ( k=1 ; k<=3 ; k++ )
-                vp[k-1] = v+3*(k-1);
-
-            for ( k=1 ; k<=3-1 ; k++ )
-                for ( l=k+1; l<=3 ; l++ )
-                    if ( j_d(l) < j_d(k) ) {
-                        x = j_d(k);
-                        j_d(k) = j_d(l);
-                        j_d(l) = x;
-                        xp = vp[k-1];
-                        vp[k-1] = vp[l-1];
-                        vp[l-1] = xp;
-                    }
-                    for ( k=1 ; k<=3 ; k++ ) {
-                        xp = vp[k-1];
-                        for ( l=0 ; l<3 ; l++ )
-                            vtmp[3*(k-1)+l] = *(xp+l);
-                    }
-                    for ( k=1 ; k<=3*3 ; k++ )
-                        v[k-1] = vtmp[k-1];
-
-                    return nrot;
-        }
-        /* for the first three sweeps tresh <> 0 */
-
-        if ( nsweep <= 3 ) 
-            tresh = 0.2*sum/(3*3);
-        else
-            tresh = 0.0;
-
-        /* perform the systematic sweep */
-
-        for ( i = 1 ; i <= 3-1 ; i++ )
-            for ( j = i+1 ; j <= 3 ; j++ ) {
-
-                /* perform the rotations, sweeping all (i,j) off-diagonal pairs of the upper
-                triangle */
-
-                g = 100.0*j_abs(j_a(i,j));
-
-                /* after four sweeps, rotation is skipped if off-diagonal element is small */
-
-                if ( nsweep > 4 && abs(j_d(i))+g == abs(j_d(i)) &&
-                    j_abs(j_d(j))+g == j_abs(j_d(j)) )
-                    j_a(i,j) = 0.0;
-                else {
-
-                    /* rotation is then performed only if the off-diagonal element is > tresh */
-
-                    if ( j_abs(j_a(i,j)) > tresh ) {
-
-                        /* rotation */
-
-                        /* t calculation: */
-                        h = j_d(j)-j_d(i);
-                        if ( j_abs(h)+g == j_abs(h) )
-                            /* t = 1/(2*theta), to avoid numerical errors */
-                                t = j_a(i,j)/(2*h);
-                        else {
-                            /* t = sgn(theta)/(abs(theta)+sqrt(1.0+theta*theta) */
-                            theta = 0.5*h/j_a(i,j);
-                            t = 1.0/(j_abs(theta)+sqrt(1.0+theta*theta))
-                                * (2*(theta>0)-1);
-                        }
-
-                        c = 1.0/sqrt(1.0+t*t);
-                        s = t*c;
-                        tau = s/(1.0+c);
-                        h = t*j_a(i,j);
-
-                        j_z(i) -= h;
-                        j_z(j) += h;
-                        j_d(i) -= h;
-                        j_d(j) += h;
-
-                        j_a(i,j) = 0.0;
-
-                        for ( k=1 ; k <= i-1 ; k++ ) {
-                            g = j_a(k,i);
-                            h = j_a(k,j);
-                            j_a(k,i) = g-s*(h+g*tau);
-                            j_a(k,j) = h+s*(g-h*tau);
-                        }
-                        for ( k=i+1 ; k <= j-1 ; k++ ) {
-                            g = j_a(i,k);
-                            h = j_a(k,j);
-                            j_a(i,k) = g-s*(h+g*tau);
-                            j_a(k,j) = h+s*(g-h*tau);
-                        }
-                        for ( k=j+1 ; k <= 3 ; k++ ) {
-                            g = j_a(i,k);
-                            h = j_a(j,k);
-                            j_a(i,k) = g-s*(h+g*tau);
-                            j_a(j,k) = h+s*(g-h*tau);
-                        }
-
-                        for ( k=1 ; k <= 3 ; k++ ) {
-                            g = j_v(k,i);
-                            h = j_v(k,j);
-                            j_v(k,i) = g-s*(h+g*tau);
-                            j_v(k,j) = h+s*(g-h*tau);
-                        }
-
-                        nrot++;
-
-                    } /* if ... > tresh */
-                } /* if element not too small */
-            } /* rotation (i,j) done */
-            for ( i=1 ; i<=3 ; i++ ) {
-                j_d(i) = ( j_b(i) += j_z(i) );
-                j_z(i) = 0.0;
-            }
-    } /* sweep done */
-
-    /*printf ("JACOBI : error, not succeded in %d iter\n",maxsw);*/
-
-    return -1;
-}
-
-//calculated the center of geometry, co-variance and use the Jacobi method to determine the eigenvalues and
-//eigenvectors that defines defined atom groups.
-void CalculateEigenValuesVectors(frame *framedata, params *me, std::vector<std::vector<double>> *eigenValVec, 
-    std::vector<std::vector<double>> *cog){ 
-        const double pi = 3.1415926535;
-
-        //find the eigenvalue and eigenvector for each specified atom group
-        //and put both in a nx4 matrix
-        std::vector<std::vector<double>> frame_eigenValVec (me->dmov_atomgroup.size(), std::vector<double> (12));
-        std::vector<std::vector<double>> frame_cog (me->dmov_atomgroup.size(), std::vector<double> (3));
-
-        for (int h = 0; h < me->dmov_atomgroup.size(); h++)
-        {           
-            //matrix structure
-            //            0  1  2
-            // matrix  =  1  3  4
-            //            2  4  5
-            double matrix[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-            double eigenvalues[] = { 0, 0, 0 };
-            double eigenvectors[] = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-
-            //some more variables
-            int c = 0;
-            double *x = framedata->x.data();
-            double sum_x = 0;
-            double avg_x = 0;
-            double *y = framedata->y.data();
-            double sum_y = 0;
-            double avg_y = 0;
-            double *z = framedata->z.data();
-            double sum_z = 0;
-            double avg_z = 0;
-
-            //number of atoms in this atom group
-            c = me->dmov_atomgroup[h].size();
-            int *atoms = me->dmov_atomgroup[h].data();
-
-            //calculated center of geometry for each dimension separately
-            for (int i = 0; i < c; i++)
-            {
-                sum_x += x[atoms[i]];
-            }
-            avg_x = sum_x / c;
-
-            for (int i = 0; i < c; i++)
-            {
-                sum_y += y[atoms[i]];
-            }
-            avg_y = sum_y / c;
-
-            for (int i = 0; i < c; i++)
-            {            
-                sum_z += z[atoms[i]];
-            }
-            avg_z = sum_z / c;
-
-            //center of geometry of atom groups in this frame
-            std::vector<double> cog_temp;
-            cog_temp.push_back(avg_x);
-            cog_temp.push_back(avg_y);
-            cog_temp.push_back(avg_z);
-            frame_cog[h] = cog_temp;
-
-            for (int i = 0; i < c; i++)
-            {
-                matrix[0] += (avg_x - x[atoms[i]]) * (avg_x - x[atoms[i]]);
-            }
-
-            for (int i = 0; i < c; i++)
-            {
-                matrix[1] += (avg_x - x[atoms[i]]) * (avg_y - y[atoms[i]]);
-            }
-
-            for (int i = 0; i < c; i++)
-            {
-                matrix[2] += (avg_x - x[atoms[i]]) * (avg_z - z[atoms[i]]);
-            }
-
-            matrix[3] = matrix[1];
-
-            for (int i = 0; i < c; i++)
-            {
-                matrix[4] += (avg_y - y[atoms[i]]) * (avg_y - y[atoms[i]]);
-            }
-
-            for (int i = 0; i < c; i++)
-            {
-                matrix[5] += (avg_y - y[atoms[i]]) * (avg_z - z[atoms[i]]);
-            }
-
-            matrix[6] = matrix[2];
-
-            matrix[7] = matrix[5];
-
-            for (int i = 0; i < c; i++)
-            {
-                matrix[8] += (avg_z - z[atoms[i]]) * (avg_z - z[atoms[i]]);
-            }
-
-            for (int i = 0; i < 9; i++)
-            {
-                matrix[i] = matrix[i]/c;
-            }
-
-#ifdef DEBUG
-            std::cout << "matrix\n" <<
-                "---------------------------------\n" << 
-                std::fixed << 
-                std::setw(10) << std::setprecision(4) << matrix[0] << " " <<
-                std::setw(10) << std::setprecision(4) << matrix[1] << " " <<
-                std::setw(10) << std::setprecision(4) << matrix[2] << "\n" <<
-                std::setw(10) << std::setprecision(4) << matrix[3] << " " <<
-                std::setw(10) << std::setprecision(4) << matrix[4] << " " <<
-                std::setw(10) << std::setprecision(4) << matrix[5] << "\n" <<
-                std::setw(10) << std::setprecision(4) << matrix[6] << " " <<
-                std::setw(10) << std::setprecision(4) << matrix[7] << " " <<
-                std::setw(10) << std::setprecision(4) << matrix[8] << std::endl;
-
-            std::cout << "\ncoordinates\n" <<
-                "---------------------------------\n" << 
-                std::fixed << 
-                std::setw(10) << std::setprecision(10) << avg_x << " " <<
-                std::setw(10) << std::setprecision(10) << sum_x << "\n" <<
-                std::setw(10) << std::setprecision(10) << avg_y << " " <<
-                std::setw(10) << std::setprecision(10) << sum_y << "\n" <<
-                std::setw(10) << std::setprecision(10) << avg_z << " " <<
-                std::setw(10) << std::setprecision(10) << sum_z << std::endl;  
-#endif // DEBUG
-
-            //jacobi
-            Jacobi(matrix, eigenvalues, eigenvectors, me->jacobi_max_iteration);
-
-            //output matrix
-            std::vector<std::vector<double>> test (3, std::vector<double> (4));
-            test[0][0] = eigenvalues[0];
-            test[0][1] = eigenvectors[0];
-            test[0][2] = eigenvectors[1];
-            test[0][3] = eigenvectors[2];
-            test[1][0] = eigenvalues[1];
-            test[1][1] = eigenvectors[3];
-            test[1][2] = eigenvectors[4];
-            test[1][3] = eigenvectors[5];
-            test[2][0] = eigenvalues[2];
-            test[2][1] = eigenvectors[6];
-            test[2][2] = eigenvectors[7];
-            test[2][3] = eigenvectors[8];
-
-            //sort the eigenvectors based on eigenvalues, largest eigenvalue first
-            std::stable_sort(test.begin(), test.end(), sortFunction);
-
-            frame_eigenValVec[h][0] = test[0][0];
-            frame_eigenValVec[h][1] = test[0][1];
-            frame_eigenValVec[h][2] = test[0][2];
-            frame_eigenValVec[h][3] = test[0][3];
-            frame_eigenValVec[h][4] = test[1][0];
-            frame_eigenValVec[h][5] = test[1][1];
-            frame_eigenValVec[h][6] = test[1][2];
-            frame_eigenValVec[h][7] = test[1][3];
-            frame_eigenValVec[h][8] = test[2][0];
-            frame_eigenValVec[h][9] = test[2][1];
-            frame_eigenValVec[h][10] = test[2][2];
-            frame_eigenValVec[h][11] = test[2][3];
-
-#ifdef DEBUG
-            std::cout << "\neigenvalues\n" <<
-                "---------------------------------\n" << 
-                std::fixed << 
-                std::setw(10) << std::setprecision(4) << frame_eigenValVec[h][0] << " " <<
-                std::setw(10) << std::setprecision(4) << frame_eigenValVec[h][1] << " " <<
-                std::setw(10) << std::setprecision(4) << frame_eigenValVec[h][2] << "\n" <<
-                "\neigenvectors\n" <<
-                "---------------------------------\n" << 
-                std::setw(10) << std::setprecision(4) << frame_eigenValVec[h][3] << " " <<
-                std::setw(10) << std::setprecision(4) << frame_eigenValVec[h][4] << " " <<
-                std::setw(10) << std::setprecision(4) << frame_eigenValVec[h][5] << "\n" <<
-                std::setw(10) << std::setprecision(4) << frame_eigenValVec[h][6] << " " <<
-                std::setw(10) << std::setprecision(4) << frame_eigenValVec[h][7] << " " <<
-                std::setw(10) << std::setprecision(4) << frame_eigenValVec[h][8] << "\n" <<
-                std::setw(10) << std::setprecision(4) << frame_eigenValVec[h][9] << " " <<
-                std::setw(10) << std::setprecision(4) << frame_eigenValVec[h][10] << " " <<
-                std::setw(10) << std::setprecision(4) << frame_eigenValVec[h][11] << std::endl;  
-#endif // DEBUG
-
-        }
-        //http://www.baptiste-wicht.com/2012/03/cp11-concurrency-tutorial-part-2-protect-shared-data/
-        *eigenValVec = frame_eigenValVec;
-        *cog = frame_cog;
-}
-
-//correction for the sign change of vectors in principal component result
-void CorrectionSignEigenValuesVectors(params *me, std::vector<std::vector<std::vector<double>>> *eigenValVec){ 
-    //define some constants
-    const double pi = 3.1415926535;
-    const double cut_off = me->jacobi_vector_correction_cutoff;
-
-    //eigenvalvec is a three dimensional std::vector frame<atom_group<eigenvalues + eigenvectors>>
-    // f {e1, v_x1, v_y1, v_z1, .....}
-    //define a reference when trying to process the first frame of the entire trajectory
-    if (me->dmov_calc_previous_last_eigenvalvec.empty())
-    { 
-        me->dmov_calc_previous_last_eigenvalvec = (*eigenValVec)[0];
-    }
-
-    //handle the first frame of a batch with respect to the last frame fo the previous batch
-    //for every define atom group
-    for (int j = 0; j < (*eigenValVec)[0].size(); j++)
-    {
-        //for each calculated eigenvector of a requested atom group
-        for (int k = 0; k < 12; k+=4)
-        {
-            //detect a sign change with respect to a preceding frame
-            int change = 
-                ((*eigenValVec)[0][j][k+1] * me->dmov_calc_previous_last_eigenvalvec[j][k+1] < 0 && std::abs((*eigenValVec)[0][j][k+1] - me->dmov_calc_previous_last_eigenvalvec[j][k+1]) > cut_off) +
-                ((*eigenValVec)[0][j][k+2] * me->dmov_calc_previous_last_eigenvalvec[j][k+2] < 0 && std::abs((*eigenValVec)[0][j][k+2] - me->dmov_calc_previous_last_eigenvalvec[j][k+2]) > cut_off) +
-                ((*eigenValVec)[0][j][k+3] * me->dmov_calc_previous_last_eigenvalvec[j][k+3] < 0 && std::abs((*eigenValVec)[0][j][k+3] - me->dmov_calc_previous_last_eigenvalvec[j][k+3]) > cut_off);
-            //correct for the sign change by *-1
-            //the vectors i.e. the main component of each principle component can change direction -180 to +0 or 0 to +180
-            if (change >= 1)
-            {
-                (*eigenValVec)[0][j][k+1] = -1 * (*eigenValVec)[0][j][k+1];
-                (*eigenValVec)[0][j][k+2] = -1 * (*eigenValVec)[0][j][k+2];
-                (*eigenValVec)[0][j][k+3] = -1 * (*eigenValVec)[0][j][k+3];
-            }
-        }
-    }
-
-    //apply the correction for the first frame of the batch too all frames in the batch
-    //for each frame
-    for (int i = 1; i < (*eigenValVec).size(); i++)
-    {
-        //for each defined atom group
-        for (int j = 0; j < (*eigenValVec)[i].size(); j++)
-        {
-            //for each calculated eigenvector of a requested atom group
-            for (int k = 0; k < 12; k+=4)
-            {
-                //detect a sign change with respect to a preceding frame
-                int change = 
-                    ((*eigenValVec)[i][j][k+1] * (*eigenValVec)[i-1][j][k+1] < 0 && std::abs((*eigenValVec)[i][j][k+1] - (*eigenValVec)[i-1][j][k+1]) > cut_off) +
-                    ((*eigenValVec)[i][j][k+2] * (*eigenValVec)[i-1][j][k+2] < 0 && std::abs((*eigenValVec)[i][j][k+2] - (*eigenValVec)[i-1][j][k+2]) > cut_off) +
-                    ((*eigenValVec)[i][j][k+3] * (*eigenValVec)[i-1][j][k+3] < 0 && std::abs((*eigenValVec)[i][j][k+3] - (*eigenValVec)[i-1][j][k+3]) > cut_off);
-                //correct for the sign change by *-1
-                //the vectors i.e. the main component of each principle component can change direction -180 to +0 or 0 to +180
-                if (change >= 1)
-                {
-                    (*eigenValVec)[i][j][k+1] = -1 * (*eigenValVec)[i][j][k+1];
-                    (*eigenValVec)[i][j][k+2] = -1 * (*eigenValVec)[i][j][k+2];
-                    (*eigenValVec)[i][j][k+3] = -1 * (*eigenValVec)[i][j][k+3];
-                }
-            }
-        }
-    }
-
-    //pass the last set of eigenvectors and eigenvalues of the last frame in this batch to the next batch processing
-    me->dmov_calc_previous_last_eigenvalvec = (*eigenValVec)[(*eigenValVec).size()-1];
-}
-
-//correct for rotation
-//fits the protein onto the z-axis.
-void CorrectRotationSolute(frame *framedata, params *me, std::vector<std::vector<double>> *eigenValVec) {
-    std::vector<double> soluteEigenValVec = (*eigenValVec)[0];
-    double referenceAxis[] = { 0, 0, 1 };
-    double cp[] = { 0, 0, 0 };
-    double sign = 0;
-    double a_r = 0;
-
-    //cross-product
-    cp[0] = soluteEigenValVec[2] * referenceAxis[2] - soluteEigenValVec[3] * referenceAxis[1];
-    cp[1] = soluteEigenValVec[3] * referenceAxis[0] - soluteEigenValVec[1] * referenceAxis[2];
-    cp[2] = soluteEigenValVec[1] * referenceAxis[1] - soluteEigenValVec[2] * referenceAxis[0];
-
-    //calculated the angle
-    a_r = ((sign > 0) - (sign < 0)) * 
-        acos(
-        (cp[0] * referenceAxis[0] + cp[1] * referenceAxis[1] + cp[2] * referenceAxis[2]) / (
-        sqrt(cp[0] * cp[0] + cp[1] * cp[1] + cp[2] * cp[2]) *
-        sqrt(referenceAxis[0] * referenceAxis[0] + referenceAxis[1] * referenceAxis[1] + referenceAxis[2] * referenceAxis[2])
-        ));
-
-    //Euclidian-space formulation from 
-    //http://www.gamedev.net/page/resources/_/technical/math-and-physics/do-we-really-need-quaternions-r1199
-    double c = cos(a_r);
-    double s = sin(a_r);
-    double t = 1-c;
-
-    //calculate rotation matrix
-    double RotationMatrix[3][3] = {}; 
-    RotationMatrix[0][0] = t*cp[0]*cp[0] + c;
-    RotationMatrix[0][1] = t*cp[0]*cp[1] + s*cp[2];
-    RotationMatrix[0][2] = t*cp[0]*cp[2] - s*cp[1];
-    RotationMatrix[1][0] = t*cp[0]*cp[1] - s *cp[2];
-    RotationMatrix[1][1] = t*cp[1]*cp[1] + c;
-    RotationMatrix[1][2] = t*cp[1]*cp[2] + s*cp[0];
-    RotationMatrix[2][0] = t*cp[0]*cp[2] + s*cp[1];
-    RotationMatrix[2][1] = t*cp[1]*cp[2] + s*cp[0];
-    RotationMatrix[2][2] = t*cp[2]*cp[2] + c;
-
-    //transform all x coordinates    
-    double *x = framedata->x.data();
-    double *y = framedata->y.data();
-    double *z = framedata->z.data();
-
-    std::vector<std::vector<double>> dim_temp (3, std::vector<double> (framedata->x.size()));
-    for (int i = 0; i < framedata->x.size(); i++)
-    {
-        dim_temp[0][i] = RotationMatrix[0][0] * x[i] + 
-            RotationMatrix[0][1] * y[i] + 
-            RotationMatrix[0][2] * z[i];
-    }
-
-    //transform all y coordinates
-    for (int i = 0; i < framedata->y.size(); i++)
-    {
-        dim_temp[1][i] = RotationMatrix[1][0] * x[i] + 
-            RotationMatrix[1][1] * y[i] + 
-            RotationMatrix[1][2] * z[i];
-    }
-
-    //transform all z coordinates
-    for (int i = 0; i < framedata->z.size(); i++)
-    {
-        dim_temp[2][i] = RotationMatrix[2][0] * x[i] + 
-            RotationMatrix[2][1] * y[i] + 
-            RotationMatrix[2][2] * z[i];
-    }
-
-    framedata->x = dim_temp[0];
-    framedata->y = dim_temp[1];
-    framedata->z = dim_temp[2];
-}
-
-//code checked 20130122: CORRECT!
 //write out the data in either CNF or PDB compatible format
 //this is not for production... code has to be written differently 
 void WriteOutFrame(frame *framedata, gz::ogzstream &outfile, params *me) {
     //check if it is possible to read file
     if (!outfile)
     {
-        std::cerr << "cannot open otuput file" << "\n";
+        std::cerr << "cannot open output file" << "\n";
     }
-    else {
-
-
-        //quickfix
+    else 
+    {
+        //quickfix for what???
         std::vector<int> temp_fix; 
+        //this get the first and last atom of each solute
         for (int i = 0; i < me->solute_count; i++)
         {
-            temp_fix.push_back(me->solute_molecules[i][0]-1);
-            temp_fix.push_back(me->solute_molecules[i][1]-1);
+            temp_fix.push_back(me->solute_molecules(0,i)-1);
+            temp_fix.push_back(me->solute_molecules(1,i)-1);
         }
-        for (int i = 0; i < me->solutes_cog_molecules.size(); i++)
+        //for (int i = 0; i < me->solutes_cog_molecules.size(); i++)
+        for (int i = 0; i < me->solutes_cog_molecules.cols(); i++)
         {
-            temp_fix.push_back(me->solutes_cog_molecules[i][0]-1);
-            temp_fix.push_back(me->solutes_cog_molecules[i][1]-1);
+            temp_fix.push_back(me->solutes_cog_molecules(0,i)-1);
+            temp_fix.push_back(me->solutes_cog_molecules(1,i)-1);
         }
         //quickfix
 
@@ -959,22 +386,24 @@ void WriteOutFrame(frame *framedata, gz::ogzstream &outfile, params *me) {
             outfile << "POSITION" << "\n";	
             outfile << std::fixed << std::setprecision(9);
 
-            //quickfix
+            //quickfix for what?
+            //write out the coordinates based on skipping solvent or not
             for (int i = 0; i < me->atomrecords; i++)
             {
                 if (me->solvent_skip)
                 {
+                    //if the current atom record is within the range of the molecule atom numbers
                     for (int ii = 0; ii < temp_fix.size(); ii+=2)
                     {
                         if (i>=temp_fix[ii] && i<=temp_fix[ii+1])
                         {
-                            outfile << framedata->prefix[i] << " " << std::setw(14) << framedata->x[i] << " " << std::setw(14) << framedata->y[i] << " " << std::setw(14) << framedata->z[i] << "\n";
+                            outfile << framedata->prefix[i] << " " << std::setw(14) << framedata->coordinates(0,i) << " " << std::setw(14) << framedata->coordinates(1,i) << " " << std::setw(14) << framedata->coordinates(2,i) << "\n";
                         }
                     }
                 }
                 else
                 {                    
-                    outfile << framedata->prefix[i] << " " << std::setw(14) << framedata->x[i] << " " << std::setw(14) << framedata->y[i] << " " << std::setw(14) << framedata->z[i] << "\n";
+                    outfile << framedata->prefix[i] << " " << std::setw(14) << framedata->coordinates(0,i) << " " << std::setw(14) << framedata->coordinates(1,i) << " " << std::setw(14) << framedata->coordinates(2,i) << "\n";
                 }
             }
             //quickfix
@@ -983,10 +412,10 @@ void WriteOutFrame(frame *framedata, gz::ogzstream &outfile, params *me) {
             outfile << "GENBOX" << "\n";
             outfile << " " << framedata->boxtype << "\n";
             outfile << std::fixed << std::setprecision(9);
-            outfile << " " << std::setw(14) << framedata->box_length_x << " " << std::setw(14) << framedata->box_length_y << " " << std::setw(14) << framedata->box_length_z << "\n";
-            outfile << " " << std::setw(14) << framedata->box_angle_x << " " << std::setw(14) << framedata->box_angle_y << " " << std::setw(14) << framedata->box_angle_z << "\n";
-            outfile << " " << std::setw(14) << framedata->box_3_x << " " << std::setw(14) << framedata->box_3_y << " " << std::setw(14) << framedata->box_3_z << "\n";
-            outfile << " " << std::setw(14) << framedata->box_4_x << " " << std::setw(14) << framedata->box_4_y << " " << std::setw(14) << framedata->box_4_z << "\n";
+            outfile << " " << std::setw(14) << framedata->box_length.x() << " " << std::setw(14) << framedata->box_length.y() << " " << std::setw(14) << framedata->box_length.z() << "\n";
+            outfile << " " << std::setw(14) << framedata->box_angle.x() << " " << std::setw(14) << framedata->box_angle.y() << " " << std::setw(14) << framedata->box_angle.z() << "\n";
+            outfile << " " << std::setw(14) << framedata->box_3.x() << " " << std::setw(14) << framedata->box_3.y() << " " << std::setw(14) << framedata->box_3.z() << "\n";
+            outfile << " " << std::setw(14) << framedata->box_4.x() << " " << std::setw(14) << framedata->box_4.y() << " " << std::setw(14) << framedata->box_4.z() << "\n";
             outfile << "END" << "\n";
         }
         if (me->outformat=="pdb")
@@ -1016,12 +445,12 @@ void WriteOutFrame(frame *framedata, gz::ogzstream &outfile, params *me) {
             //67 - 70       Integer       z              Z value.
             //CRYST1    1.000    1.000    1.000  90.00  90.00  90.00 P 1           1
             outfile << "CRYST " 
-                << std::setw(9) << std::setprecision(3) << framedata->box_length_x
-                << std::setw(9) << std::setprecision(3) << framedata->box_length_y
-                << std::setw(9) << std::setprecision(3) << framedata->box_length_z
-                << std::setw(7) << std::setprecision(2) << framedata->box_angle_x
-                << std::setw(7) << std::setprecision(2) << framedata->box_angle_y
-                << std::setw(7) << std::setprecision(2) << framedata->box_angle_z
+                << std::setw(9) << std::setprecision(3) << framedata->box_length.x()*10
+                << std::setw(9) << std::setprecision(3) << framedata->box_length.y()*10
+                << std::setw(9) << std::setprecision(3) << framedata->box_length.z()*10
+                << std::setw(7) << std::setprecision(2) << framedata->box_angle.x()
+                << std::setw(7) << std::setprecision(2) << framedata->box_angle.y()
+                << std::setw(7) << std::setprecision(2) << framedata->box_angle.z()
                 << " P 1           1"
                 << "\n";
             outfile << std::fixed << std::setprecision(9);
@@ -1061,9 +490,9 @@ void WriteOutFrame(frame *framedata, gz::ogzstream &outfile, params *me) {
                                 << std::setw(4) << framedata->prefix[i].substr(1, 4)
                                 << "    "
                                 << std::fixed
-                                << std::setw(8) << std::setprecision(3) << framedata->x[i] * 10
-                                << std::setw(8) << std::setprecision(3) << framedata->y[i] * 10
-                                << std::setw(8) << std::setprecision(3) << framedata->z[i] * 10
+                                << std::setw(8) << std::setprecision(3) << framedata->coordinates(0,i) * 10
+                                << std::setw(8) << std::setprecision(3) << framedata->coordinates(1,i) * 10
+                                << std::setw(8) << std::setprecision(3) << framedata->coordinates(2,i) * 10
                                 << std::setw(6) << std::setprecision(2) << 1.0
                                 << std::setw(6) << std::setprecision(2) << 1.0 << "\n"                
                                 ;
@@ -1099,9 +528,9 @@ void WriteOutFrame(frame *framedata, gz::ogzstream &outfile, params *me) {
                         << std::setw(4) << framedata->prefix[i].substr(1, 4)
                         << "    "
                         << std::fixed
-                        << std::setw(8) << std::setprecision(3) << framedata->x[i] * 10
-                        << std::setw(8) << std::setprecision(3) << framedata->y[i] * 10
-                        << std::setw(8) << std::setprecision(3) << framedata->z[i] * 10
+                        << std::setw(8) << std::setprecision(3) << framedata->coordinates(0,i) * 10
+                        << std::setw(8) << std::setprecision(3) << framedata->coordinates(1,i) * 10
+                        << std::setw(8) << std::setprecision(3) << framedata->coordinates(2,i) * 10
                         << std::setw(6) << std::setprecision(2) << 1.0
                         << std::setw(6) << std::setprecision(2) << 1.0 << "\n"                
                         ;
@@ -1111,9 +540,9 @@ void WriteOutFrame(frame *framedata, gz::ogzstream &outfile, params *me) {
             {
                 outfile << "HETATM" << std::setw(5) << me->atomrecords+2 << "  ZN   ZN A9999    "
                     << std::fixed
-                    << std::setw(8) << std::setprecision(3) << framedata->solute_cog_x * 10
-                    << std::setw(8) << std::setprecision(3) << framedata->solute_cog_y * 10
-                    << std::setw(8) << std::setprecision(3) << framedata->solute_cog_z * 10
+                    << std::setw(8) << std::setprecision(3) << framedata->solute_cog.x() * 10
+                    << std::setw(8) << std::setprecision(3) << framedata->solute_cog.y() * 10
+                    << std::setw(8) << std::setprecision(3) << framedata->solute_cog.z() * 10
                     << "  1.00  0.00          ZN  \n";
             }
             outfile << "ENDMDL" << "\n";
@@ -1121,24 +550,21 @@ void WriteOutFrame(frame *framedata, gz::ogzstream &outfile, params *me) {
     }
 }
 
-//code checked 20130122: CORRECT!
 char* XPathGetText(std::string xpath_query, xmlXPathContextPtr xpathCtx) 
 {
     xmlXPathObjectPtr xpathObj = xmlXPathEvalExpression(BAD_CAST xpath_query.c_str(), xpathCtx);
     return (char*)xmlNodeGetContent(xpathObj->nodesetval->nodeTab[0]);	
 }
 
-//code checked 20130122: CORRECT!
 //reads a references file for topology information that is needed for writting out
 //files in CNF and PDB compatible format
 void TrcReferenceFrame(std::vector<std::string> *prefix, std::string trc_reference) {
-
     std::ifstream infile(trc_reference);
 
     //check if it is possible to read file
     if (!infile)
     {
-        std::cerr << "cannot open otuput file" << "\n";
+        std::cerr << "cannot open input file" << "\n";
     }
     else {
         //read line by line as string while not end-of-file
@@ -1167,10 +593,8 @@ void TrcReferenceFrame(std::vector<std::string> *prefix, std::string trc_referen
             }
         }
     }
-    // std::cout << "using reference file"  << std::endl;
 }
 
-//code checked 20130122: CORRECT!
 //parse parameter input file
 void ParseParamsInput(params *this_params, std::string job_id, std::string param_file) {
     //initialize libxml
@@ -1222,15 +646,15 @@ void ParseParamsInput(params *this_params, std::string job_id, std::string param
         }
         //get solvent definitions
         //get first atom
-        this_params->solvent_atoms_first = atoi(XPathGetText("./topology/solvent/@first_atom", xpathCtx));
+        this_params->solvent_molecules(0,0) = atoi(XPathGetText("./topology/solvent/@first_atom", xpathCtx));
         //get last atom
-        this_params->solvent_atoms_last = atoi(XPathGetText("./topology/solvent/@last_atom", xpathCtx));
+        this_params->solvent_molecules(1,0) = atoi(XPathGetText("./topology/solvent/@last_atom", xpathCtx));
         //skip or keep solvent
         this_params->solvent_skip = atoi(XPathGetText("./topology/solvent/@skip", xpathCtx));
         //get number of atoms
-        this_params->solvent_size = atoi(XPathGetText("./topology/solvent/number_of_atoms", xpathCtx));
+        this_params->solvent_molecules(2,0) = atoi(XPathGetText("./topology/solvent/number_of_atoms", xpathCtx));
         //get dimension expansion factor
-        this_params->solvent_dimension_expansion = atoi(XPathGetText("./topology/solvent/dimension_expansion", xpathCtx));
+        this_params->solvent_molecules(3,0) = atoi(XPathGetText("./topology/solvent/dimension_expansion", xpathCtx));
 
 #ifdef DEBUG
         std::cout << "got solvent parameters" << std::endl;
@@ -1242,23 +666,20 @@ void ParseParamsInput(params *this_params, std::string job_id, std::string param
         //loops through solvents
         //std::cout << xmlNodeGetContent(xpathObj->nodesetval->nodeTab[0]) << std::endl;
         //get all COG solutes
+        this_params->solutes_cog_molecules.resize(5, COGSolute->nodesetval->nodeNr); 
         for (int j = 0; j < COGSolute->nodesetval->nodeNr; j++)
         {
-            std::vector<int> temp;
             xpathCtx->node = COGSolute->nodesetval->nodeTab[j];
             //get first atom of COG solute
-            temp.push_back(atoi(XPathGetText("./@first_atom", xpathCtx)));
+            this_params->solutes_cog_molecules(0,i) = atoi(XPathGetText("./@first_atom", xpathCtx));
             //get last atom of COG solute
-            temp.push_back(atoi(XPathGetText("./@last_atom", xpathCtx)));
+            this_params->solutes_cog_molecules(1,i) = atoi(XPathGetText("./@last_atom", xpathCtx));
             //get number of atom of COG solute
-            temp.push_back(atoi(XPathGetText("./number_of_atoms", xpathCtx)));	
+            this_params->solutes_cog_molecules(2,i) = atoi(XPathGetText("./number_of_atoms", xpathCtx));
             //get dimension expansion factor
-            temp.push_back(atoi(XPathGetText("./dimension_expansion", xpathCtx)));
+            this_params->solutes_cog_molecules(3,i) = atoi(XPathGetText("./dimension_expansion", xpathCtx));
             //skip or keep COG solute
-            temp.push_back(atoi(XPathGetText("./@skip", xpathCtx)));	
-            this_params->solutes_cog_molecules.push_back(temp);
-            temp.clear();
-
+            this_params->solutes_cog_molecules(4,i) = atoi(XPathGetText("./@skip", xpathCtx));
         }
         xmlXPathFreeObject(COGSolute);
 
@@ -1271,40 +692,44 @@ void ParseParamsInput(params *this_params, std::string job_id, std::string param
         xpath = "./topology/solutes/solute";
         xmlXPathObjectPtr solutes = xmlXPathEvalExpression(BAD_CAST xpath.c_str(), xpathCtx);
         //get all solutes
+        this_params->solute_molecules.resize(4, solutes->nodesetval->nodeNr);
+
+        std::cout << solutes->nodesetval->nodeNr << std::endl;
+        std::cout << this_params->solute_molecules.cols() << std::endl;
+        std::cout << this_params->solute_molecules.rows() << std::endl;
+        std::cout << this_params->solute_molecules.size() << std::endl;
+
         for (int j = 0; j < solutes->nodesetval->nodeNr; j++)
         {
-            std::vector<int> temp;
             xpathCtx->node = solutes->nodesetval->nodeTab[j];
             //get first atom of solute
-            temp.push_back(atoi(XPathGetText("./@first_atom", xpathCtx)));
+            this_params->solute_molecules(0,j) = atoi(XPathGetText("./@first_atom", xpathCtx));
             //get last atom of solute
-            temp.push_back(atoi(XPathGetText("./@last_atom", xpathCtx)));
+            this_params->solute_molecules(1,j) = atoi(XPathGetText("./@last_atom", xpathCtx));
             //get dimension expansion factor
-            temp.push_back(atoi(XPathGetText("./dimension_expansion", xpathCtx)));
+            this_params->solute_molecules(2,j) = atoi(XPathGetText("./dimension_expansion", xpathCtx));
             //skip or keep solute
-            temp.push_back(atoi(XPathGetText("./@skip", xpathCtx)));
-            this_params->solute_molecules.push_back(temp);
-            temp.clear();
+            this_params->solute_molecules(3,j) = atoi(XPathGetText("./@skip", xpathCtx));
         };
-        this_params->solute_count = this_params->solute_molecules.size();
+        this_params->solute_count = this_params->solute_molecules.cols();
         xmlXPathFreeObject(solutes);
+
+#ifdef DEBUG
+        std::cout << "got solutes parameters" << std::endl;
+#endif // DEBUG
 
         //read the variables section
         xpathCtx->node = xpathObj->nodesetval->nodeTab[i];
-
-        //first get the frameoutX specific options
-        //write out original cog or not
+        //write out cog or not
         this_params->cog_write = atoi(XPathGetText("./analysis/frameout/cog_write", xpathCtx));
         //correct by shifting cog or not
         this_params->cog_correction = atoi(XPathGetText("./analysis/frameout/cog_correction", xpathCtx));
         //get distance cut
-        this_params->distance_cut_off = atof(XPathGetText("./analysis/frameout/distance_cut_off", xpathCtx)) * atof(XPathGetText("./analysis/frameout/distance_cut_off", xpathCtx));
-        //do rotation correction or not
-        this_params->rotation_correction = atoi(XPathGetText("./analysis/frameout/rotation_correction", xpathCtx));
-        //Jacobi maximum number of iterations
-        this_params->jacobi_max_iteration = atoi(XPathGetText("./analysis/frameout/jacobi/@max_iteration", xpathCtx));
-        //Jacobi eigenvector direction correction cut-off value
-        this_params->jacobi_vector_correction_cutoff = atof(XPathGetText("./analysis/frameout/jacobi/@eigenvector_correction_cut_off", xpathCtx));
+        this_params->distance_cut_off = atof(XPathGetText("./analysis/frameout/distance_cut_off", xpathCtx))*atof(XPathGetText("./analysis/frameout/distance_cut_off", xpathCtx));
+
+#ifdef DEBUG
+        std::cout << "got analysis parameters" << std::endl;
+#endif // DEBUG
 
         //get number of frames per thread
         this_params->num_frame_per_thread = atoi(XPathGetText("./variables/frames_per_thread", xpathCtx));
@@ -1323,6 +748,11 @@ void ParseParamsInput(params *this_params, std::string job_id, std::string param
         {        
             this_params->num_thread_real = this_params->num_thread * atoi(XPathGetText("./variables/number_of_threads_multiplier", xpathCtx));
         }
+
+#ifdef DEBUG
+        std::cout << "got hardware parameters" << std::endl;
+#endif // DEBUG
+
         //get dimension expansion factor
         this_params->trc_reference = XPathGetText("./variables/reference_file", xpathCtx);
 
@@ -1357,7 +787,6 @@ void ParseParamsInput(params *this_params, std::string job_id, std::string param
     xmlFreeDoc(doc);
 }
 
-//code checked 20130122: CORRECT!
 void GenboxParser(frame *currentFrame, int genBox_counter, std::string line) 
 {
     switch (genBox_counter)
@@ -1366,43 +795,43 @@ void GenboxParser(frame *currentFrame, int genBox_counter, std::string line)
         currentFrame->boxtype = std::stoi(line);
         break;
     case 1:
-        currentFrame->box_length_x = std::stod(line.substr(0,15));
-        currentFrame->box_length_y = std::stod(line.substr(15,15));
-        currentFrame->box_length_z = std::stod(line.substr(30,15));
+        currentFrame->box_length.x() = std::stod(line.substr(0,15));
+        currentFrame->box_length.y() = std::stod(line.substr(15,15));
+        currentFrame->box_length.z() = std::stod(line.substr(30,15));
         break;
     case 2:
-        currentFrame->box_angle_x = std::stod(line.substr(0,15));
-        currentFrame->box_angle_y = std::stod(line.substr(15,15));
-        currentFrame->box_angle_z = std::stod(line.substr(30,15));
+        currentFrame->box_angle.x() = std::stod(line.substr(0,15));
+        currentFrame->box_angle.y() = std::stod(line.substr(15,15));
+        currentFrame->box_angle.z() = std::stod(line.substr(30,15));
         break;
     case 3:
-        currentFrame->box_3_x = std::stod(line.substr(0,15));
-        currentFrame->box_3_y = std::stod(line.substr(15,15));
-        currentFrame->box_3_z = std::stod(line.substr(30,15));
+        currentFrame->box_3.x() = std::stod(line.substr(0,15));
+        currentFrame->box_3.y() = std::stod(line.substr(15,15));
+        currentFrame->box_3.z() = std::stod(line.substr(30,15));
         break;
     case 4:
-        currentFrame->box_4_x = std::stod(line.substr(0,15));
-        currentFrame->box_4_y = std::stod(line.substr(15,15));
-        currentFrame->box_4_z = std::stod(line.substr(30,15));
+        currentFrame->box_4.x() = std::stod(line.substr(0,15));
+        currentFrame->box_4.y() = std::stod(line.substr(15,15));
+        currentFrame->box_4.z() = std::stod(line.substr(30,15));
         break;
     }
 }
 
-//code checked 20130122: CORRECT!
-void PositionBlockParser(params &me, std::string &line, int positionBlock_counter, std::vector<std::string> *prefix, std::vector<double> *x, std::vector<double> *y, std::vector<double> *z) 
+//undecided
+void PositionBlockParser(params &me, std::string &line, int positionBlock_counter, std::vector<std::string> *prefix, Eigen::MatrixXd *coordinates) 
 {
     if (me.informat == "trc")
     {
-        (*x)[positionBlock_counter] = std::stod(line.substr(0,15));
-        (*y)[positionBlock_counter] = std::stod(line.substr(15,15));
-        (*z)[positionBlock_counter] = std::stod(line.substr(30,15));
+        (*coordinates)(0,positionBlock_counter) = std::stod(line.substr(0,15));
+        (*coordinates)(1,positionBlock_counter) = std::stod(line.substr(15,15));
+        (*coordinates)(2,positionBlock_counter) = std::stod(line.substr(30,15));
     }
     if (me.informat == "cnf")
     {
         (*prefix)[positionBlock_counter] = line.substr(0,24);
-        (*x)[positionBlock_counter] = std::stod(line.substr(25,15));
-        (*y)[positionBlock_counter] = std::stod(line.substr(40,15));
-        (*z)[positionBlock_counter] = std::stod(line.substr(55,15));
+        (*coordinates)(0,positionBlock_counter) = std::stod(line.substr(25,15));
+        (*coordinates)(1,positionBlock_counter) = std::stod(line.substr(40,15));
+        (*coordinates)(2,positionBlock_counter) = std::stod(line.substr(55,15));
     }
 }
 
@@ -1415,31 +844,26 @@ int main(int argc, char* argv[])
     params me;
     ParseParamsInput(&me, job_id, param_file);
 
+    me.gather = true;
+
     //decide based on input, how many lines to write out in final output file
     int writeAtomRecordsCount = 0;
     if (me.solvent_skip)
     {
-        int solutes_cog_count = me.solutes_cog_molecules.size();
+        int solutes_cog_count = me.solutes_cog_molecules.cols();
         if (solutes_cog_count > 0)
         {                            
-            writeAtomRecordsCount= me.solutes_cog_molecules[solutes_cog_count-1][1];
+            writeAtomRecordsCount= me.solutes_cog_molecules(1,solutes_cog_count-1);
         }
         else
         {
-            writeAtomRecordsCount = me.solute_molecules[me.solute_count-1][1];
+            writeAtomRecordsCount = me.solute_molecules(1,me.solute_count-1);
         }
     }
     else {
         writeAtomRecordsCount = me.atomrecords;
     }
 
-    //rotation parameters
-    std::vector<std::vector<int>> ag (1, std::vector<int> (2));
-    ag[0][0] = 0;
-    ag[0][1] = me.solute_molecules[me.solute_molecules.size()-1][1];
-    me.dmov_atomgroup = ag;
-
-#ifdef DEBUG
     std::cout << "input parameters defined" << std::endl;
     std::cout << std::left;
     std::cout << "  number of atom records          : " << me.atomrecords << std::endl;
@@ -1460,32 +884,27 @@ int main(int argc, char* argv[])
     std::cout << "  output frames per file          : " << me.output_fragment_size << std::endl;
     std::cout << "  output every n frame(s)         : " << me.output_fragment_skipframes << std::endl;
     std::cout << "  output every n picoseconds      : " << me.output_fragment_skiptime << std::endl;
-    std::cout << "  reference coordinates           : " << me.ref_coords[0] << " " << me.ref_coords[1] << " " << me.ref_coords[2] << std::endl;
+    std::cout << "  reference coordinates           : " << me.ref_coords.x() << " " << me.ref_coords.y() << " " << me.ref_coords.z() << std::endl;
     std::cout << "  skip solvent                    : " << me.solvent_skip << std::endl;
     std::cout << "  solutes cog                     : " << std::endl;
-    for (unsigned int i = 0; i < me.solutes_cog_molecules.size(); i++)
+    for (unsigned int i = 0; i < me.solutes_cog_molecules.cols(); i++)
     {
-        std::cout << "                                    " << me.solutes_cog_molecules[i][0] << " " << me.solutes_cog_molecules[i][1] << " " << me.solutes_cog_molecules[i][2] << " " << me.solutes_cog_molecules[i][3] <<  " " << me.solutes_cog_molecules[i][4] << std::endl;
+        std::cout << "                                    " << me.solutes_cog_molecules(0,i) << " " << me.solutes_cog_molecules(1,i) << " " << me.solutes_cog_molecules(2,i) << " " << me.solutes_cog_molecules(3,i) <<  " " << me.solutes_cog_molecules(4,i) << std::endl;
     }
     std::cout << "  number of solutes               : " << me.solute_count << std::endl;
     std::cout << "  solutes atom numbering          : " << std::endl;
-    for (unsigned int i = 0; i < me.solute_molecules.size(); i++)
+    for (unsigned int i = 0; i < me.solute_molecules.cols(); i++)
     {
-        std::cout << "                                    " << me.solute_molecules[i][0] << " " << me.solute_molecules[i][1] << " " << me.solute_molecules[i][2] << " " << me.solute_molecules[i][3] << std::endl;
+        std::cout << "                                    " << me.solute_molecules(0,i) << " " << me.solute_molecules(1,i) << " " << me.solute_molecules(2,i) << " " << me.solute_molecules(3,i) << std::endl;
     }
-    std::cout << "  solvent cog dimension expansion : " << me.solvent_dimension_expansion << std::endl;
-    std::cout << "  solvent size                    : " << me.solvent_size << std::endl;
-    std::cout << "  trc refernce file               : " << me.trc_reference << std::endl;
-#endif // DEBUG
+    std::cout << "  solvent cog dimension expansion : " << me.solvent_molecules(3,0) << std::endl;
+    std::cout << "  solvent size                    : " << me.solvent_molecules(2,0) << std::endl;
+    std::cout << "  trc refernce file               : " << me.trc_reference << std::endl;  
 
     //holds the active frames
     int activeFrame_count = me.num_thread_real * me.num_frame_per_thread;
     std::vector<frame> activeFrames (activeFrame_count);
     std::vector<frame> activeFramesCopy (activeFrame_count);
-
-    //eigenvalues and eigenvectors
-    std::vector<std::vector<std::vector<double>>> eigenValVec (activeFrame_count);
-    std::vector<std::vector<std::vector<double>>> centerOfGeometry (activeFrame_count);
 
     //performance log
     auto start = std::chrono::system_clock::now();
@@ -1500,9 +919,8 @@ int main(int argc, char* argv[])
 
     //position block array size
     std::vector<std::string> prefix (me.atomrecords);
-    std::vector<double> x (me.atomrecords);
-    std::vector<double> y (me.atomrecords);
-    std::vector<double> z (me.atomrecords);
+    Eigen::MatrixXd coordinates(0,0);
+    coordinates.resize(3,me.atomrecords);
 
 #ifdef DEBUG
     std::cout << "--->atom records c++ vectors initialized" << std::endl;
@@ -1544,7 +962,7 @@ int main(int argc, char* argv[])
         std::cout << "  " << me.input_files[i] << std::endl;
 
         //remember if box has been shift to gather first atom of a frame
-        int init_shift[3] = { 0, 0, 0 };
+        Eigen::Vector3d init_shift(0,0,0);
 
         //define file to read
         gz::igzstream file(me.input_files[i].c_str());
@@ -1566,7 +984,7 @@ int main(int argc, char* argv[])
         //check if it is possible to read file
         if (!file)
         {
-            std::cerr << "cannot open otuput file" << "\n";
+            std::cerr << "cannot open input file" << "\n";
         }
         else {
 
@@ -1588,39 +1006,20 @@ int main(int argc, char* argv[])
                     if (line.substr(0,6) == "TITLE")
                     {
                         isTitleBlock = true;
-
-#ifdef DEBUG
-                        std::cout << "--->    found TITLE" << std::endl;
-#endif // DEBUG
-
                     }
                     else if (line.substr(0,8) == "TIMESTEP")
                     {
                         isTimestepBlock = true;
-#ifdef DEBUG
-                        std::cout << "--->    found TIMESTEP" << std::endl;
-#endif // DEBUG
-
                     }
                     else if (line.substr(0,8) == "POSITION")
                     {
                         positionBlock_counter = 0;
                         isPositionBlock = true;
-
-#ifdef DEBUG
-                        std::cout << "--->    found POSITION" << std::endl;
-#endif // DEBUG
-
                     }
                     else if (line.substr(0,6) == "GENBOX")
                     {
                         genBox_counter = 0;
                         isGenboxBlock = true;
-
-#ifdef DEBUG
-                        std::cout << "--->    found GENBOX" << std::endl;
-#endif // DEBUG
-
                     }
                     //reset if end of the block is found
                     else if (line.substr(0,3) == "END")
@@ -1702,8 +1101,8 @@ int main(int argc, char* argv[])
                             }
                             else if (me.informat == "cnf")
                             {
-                                currentFrame.time = std::stod(timestepBlock.substr(19,38));
-                                currentFrame.timestep = std::stol(timestepBlock.substr(0,19));
+                                currentFrame.time = std::stod(timestepBlock.substr(18,20));
+                                currentFrame.timestep = std::stol(timestepBlock.substr(0,18));
                             }
 
 #ifdef DEBUG
@@ -1717,9 +1116,7 @@ int main(int argc, char* argv[])
                         if (isPositionBlock)
                         {
                             currentFrame.prefix = prefix;
-                            currentFrame.x = x;
-                            currentFrame.y = y;
-                            currentFrame.z = z;
+                            currentFrame.coordinates = coordinates;
 
 #ifdef DEBUG
                             if (processThisFrame)
@@ -1734,10 +1131,13 @@ int main(int argc, char* argv[])
                             //the first frame has been collected, it's no longer the first pass through the loops
                             firstPass = false;
 
+                            //first atom which is used to define reference between frames in the code below
+                            //is defined as the first atom of the first solute molecule specified in the 
+                            //input file
                             int first_atom_solute = 0;
                             if (me.solute_count >  0)
                             {
-                                first_atom_solute = me.solute_molecules[0][0] - 1;
+                                first_atom_solute = me.solute_molecules(0,0) - 1;
                             }
 
                             //skip frame[0] from the reference process, because it is the first frame 
@@ -1745,21 +1145,21 @@ int main(int argc, char* argv[])
                             //also get the time of the first frame as reference for time-based skipping
                             if (frame_counter==0)
                             {
-                                currentFrame.init_shift_x = 0;
-                                currentFrame.init_shift_y = 0;
-                                currentFrame.init_shift_z = 0;
-                                me.ref_coords[0] = x[first_atom_solute];
-                                me.ref_coords[1] = y[first_atom_solute];
-                                me.ref_coords[2] = z[first_atom_solute];
+                                currentFrame.init_shift(0) = 0;
+                                currentFrame.init_shift(1) = 0;
+                                currentFrame.init_shift(2) = 0;
+                                me.ref_coords.x() = coordinates(0,first_atom_solute);
+                                me.ref_coords.y() = coordinates(1,first_atom_solute);
+                                me.ref_coords.z() = coordinates(2,first_atom_solute);
                             }
                             else 
                             {
                                 //do not combine the following lines
                                 //gather should be kept separate from reference coordinates assignment
                                 FirstAtomBasedBoxShifter(&currentFrame, first_atom_solute, &me);
-                                me.ref_coords[0] = currentFrame.x[first_atom_solute];
-                                me.ref_coords[1] = currentFrame.y[first_atom_solute];
-                                me.ref_coords[2] = currentFrame.z[first_atom_solute];
+                                me.ref_coords.x() = coordinates(0,first_atom_solute);
+                                me.ref_coords.y() = coordinates(1,first_atom_solute);
+                                me.ref_coords.z() = coordinates(2,first_atom_solute);
                             }
 
                             //until n frames have been read in
@@ -1791,98 +1191,64 @@ int main(int argc, char* argv[])
 
                                 try
                                 {
-                                    for (int g = 0; g < me.num_thread_real; g++)
+                                    if (me.gather)
                                     {
-                                        myThreads[g] = std::thread([&activeFrames, &me, g, &eigenValVec, &centerOfGeometry]()
+
+                                        for (int g = 0; g < me.num_thread_real; g++)
                                         {
-                                            for (int f = (g * me.num_frame_per_thread); f < ((g + 1) * me.num_frame_per_thread); f++)
+                                            myThreads[g] = std::thread([&activeFrames, &me, g]()
                                             {
-                                                //STEP 2a: //solute gathering
-                                                SoluteGatherer(&activeFrames[f], f, &me);
-
-#ifdef DEBUG
-                                                std::cout << "      threads " << g << ": solutes gathered" << std::endl;
-#endif // DEBUG
-
-                                                for (unsigned int j = 0; j < me.solutes_cog_molecules.size(); j++)
+                                                for (int f = (g * me.num_frame_per_thread); f < ((g + 1) * me.num_frame_per_thread); f++)
                                                 {
-                                                    //STEP 2b: gather the non-solvent with respect to the COG of solutes
-                                                    COGGatherer(&activeFrames[f], me.solutes_cog_molecules[j][0],  me.solutes_cog_molecules[j][1], me.solutes_cog_molecules[j][2], me.solutes_cog_molecules[j][3]);
+                                                    //STEP 2a: //solute gathering
+                                                    SoluteGatherer(&activeFrames[f], f, &me);
+
+#ifdef DEBUG
+                                                    std::cout << "      threads " << g << ": solutes gathered" << std::endl;
+#endif // DEBUG
+
+                                                    for (unsigned int j = 0; j < me.solutes_cog_molecules.cols(); j++)
+                                                    {
+                                                        //STEP 2b: gather the non-solvent with respect to the COG of solutes
+                                                        COGGatherer(&activeFrames[f], me.solutes_cog_molecules(0,j),  me.solutes_cog_molecules(1,j), me.solutes_cog_molecules(2,j), me.solutes_cog_molecules(3,j));
+                                                    }
+
+#ifdef DEBUG
+                                                    std::cout << "      threads " << g << ": solutes (COG) gathered" << std::endl;
+#endif // DEBUG
+
+                                                    //STEP 2c: gather the solvent with respect to the COG of solutes
+                                                    COGGatherer(&activeFrames[f], me.solvent_molecules(0,0), me.solvent_molecules(1,0), me.solvent_molecules(2,0), me.solvent_molecules(3,0));
+
+#ifdef DEBUG
+                                                    std::cout << "      threads " << g << ": solvent (COG) gathered" << std::endl;
+#endif // DEBUG
+
+                                                    //STEP 2d: correct COG to (0,0,0)
+                                                    if (me.cog_correction)
+                                                    {
+                                                        activeFrames[f].coordinates.colwise() -= activeFrames[f].solute_cog;  
+                                                    }
+
+#ifdef DEBUG
+                                                    std::cout << "      threads " << g << ": COG correction performed" << std::endl;
+#endif // DEBUG
+
                                                 }
-
-#ifdef DEBUG
-                                                std::cout << "      threads " << g << ": solutes (COG) gathered" << std::endl;
-#endif // DEBUG
-
-                                                CalculateEigenValuesVectors(&activeFrames[f], &me, &eigenValVec[f], &centerOfGeometry[f]);
-
-#ifdef DEBUG
-                                                std::cout << "      threads " << g << ": COG correction performed" << std::endl;
-#endif // DEBUG
-
-                                            }
-                                        });					
-                                    }
-                                    for (int g = 0; g < me.num_thread_real; g++)
-                                    {
-                                        myThreads[g].join();
-#ifdef DEBUG
-                                        std::cout << "--->joining thread: " << g << std::endl;
-#endif // DEBUG
-                                    }
-#ifdef DEBUG
-                                    std::cout << "--->all thread finished successfully" << std::endl;
-#endif // DEBUG
-
-                                    CorrectionSignEigenValuesVectors(&me, &eigenValVec);
-
-                                    for (int g = 0; g < me.num_thread_real; g++)
-                                    {
-                                        myThreads[g] = std::thread([&activeFrames, &me, g, &eigenValVec, &centerOfGeometry]()
+                                            });					
+                                        }
+                                        for (int g = 0; g < me.num_thread_real; g++)
                                         {
-                                            for (int f = (g * me.num_frame_per_thread); f < ((g + 1) * me.num_frame_per_thread); f++)
-                                            {
-                                                CorrectRotationSolute(&activeFrames[f], &me, &eigenValVec[f]);
-
-                                                //STEP 2c: gather the solvent with respect to the COG of solutes
-                                                COGGatherer(&activeFrames[f], me.solvent_atoms_first, me.solvent_atoms_last, me.solvent_size, me.solvent_dimension_expansion);
-
+                                            myThreads[g].join();
 #ifdef DEBUG
-                                                std::cout << "      threads " << g << ": solvent (COG) gathered" << std::endl;
+                                            std::cout << "--->joining thread: " << g << std::endl;
+#endif // DEBUG
+                                        }
+#ifdef DEBUG
+                                        std::cout << "--->all thread finished successfully" << std::endl;
 #endif // DEBUG
 
-                                                //STEP 2d: correct COG to (0,0,0)
-                                                if (me.cog_correction)
-                                                {
-                                                    for (int j = 0; j < me.atomrecords; j++)
-                                                    {                                                
-                                                        activeFrames[f].x[j] = activeFrames[f].x[j] - activeFrames[f].solute_cog_x;
-                                                    }
-                                                    for (int j = 0; j < me.atomrecords; j++)
-                                                    {                                                
-                                                        activeFrames[f].y[j] = activeFrames[f].y[j] - activeFrames[f].solute_cog_y;
-                                                    }
-                                                    for (int j = 0; j < me.atomrecords; j++)
-                                                    {                                                
-                                                        activeFrames[f].z[j] = activeFrames[f].z[j] - activeFrames[f].solute_cog_z;
-                                                    }
-                                                }
-
-#ifdef DEBUG
-                                                std::cout << "      threads " << g << ": COG correction performed" << std::endl;
-#endif // DEBUG
-
-                                            }
-                                        });					
                                     }
-                                    for (int g = 0; g < me.num_thread_real; g++)
-                                    {
-                                        myThreads[g].join();
-#ifdef DEBUG
-                                        std::cout << "--->joining thread: " << g << std::endl;
-#endif // DEBUG
-                                    }
-
                                 }
                                 catch (const std::exception &e) {
                                     std::wcout << "\nEXCEPTION: " << e.what() << std::endl;
@@ -1954,13 +1320,13 @@ int main(int argc, char* argv[])
                         {
                             if (processThisFrame)
                             {
-                                PositionBlockParser(me, line, positionBlock_counter, &prefix, &x, &y, &z);
+                                PositionBlockParser(me, line, positionBlock_counter, &prefix, &coordinates);
                             }
                             //a frame is not process the data of the previous frame is retained,
                             //but the data of the first atom is changed to match that of the current frame
                             else if (!processThisFrame && positionBlock_counter == 0)
                             {
-                                PositionBlockParser(me, line, positionBlock_counter, &prefix, &x, &y, &z);
+                                PositionBlockParser(me, line, positionBlock_counter, &prefix, &coordinates);
                             }
                             positionBlock_counter += 1;
                         }
@@ -1986,131 +1352,81 @@ int main(int argc, char* argv[])
                 int remainder = activeFrame_count % me.num_thread_real;
                 int perThread = activeFrame_count / me.num_thread_real;   
 
-                //divide as equally
-                for (int g = 0; g < me.num_thread_real; g++)
+                if (me.gather)
                 {
-                    workers.push_back(std::thread([&activeFrames, &me, g, perThread, &eigenValVec, &centerOfGeometry]()
+
+                    //divide as equally
+                    for (int g = 0; g < me.num_thread_real; g++)
                     {
-                        for (int f = (g * perThread); f < ( (g + 1) * perThread); f++)
+                        //DO SOMETHING
+                        workers.push_back(std::thread([&activeFrames, &me, g, perThread]()
+                        {
+                            for (int f = (g * perThread); f < ( (g + 1) * perThread); f++)
+                            {
+                                //STEP 2a: //solute gathering
+                                SoluteGatherer(&activeFrames[f], f, &me);
+
+                                for (unsigned int j = 0; j < me.solutes_cog_molecules.size(); j++)
+                                {
+                                    //STEP 2b: gather the non-solvent with respect to the COG of solutes
+                                    COGGatherer(&activeFrames[f], me.solutes_cog_molecules(0,j),  me.solutes_cog_molecules(1,j), me.solutes_cog_molecules(2,j), me.solutes_cog_molecules(3,j));
+                                }
+
+                                if (!me.solvent_skip)
+                                {
+                                    //STEP 2c: gather the solvent with respect to the COG of solutes
+                                    COGGatherer(&activeFrames[f], me.solvent_molecules(0,0), me.solvent_molecules(1,0), me.solvent_molecules(2,0), me.solvent_molecules(3,0));
+                                }
+
+                                //STEP 2d: correct COG to (0,0,0)
+                                if (me.cog_correction)
+                                {
+                                    activeFrames[f].coordinates.colwise() -= activeFrames[f].solute_cog;
+                                }
+                            }
+                        }));
+                    }
+                    for (int g = 0; g < workers.size(); g++)
+                    {
+                        workers[g].join();
+                    }
+                    workers.clear();
+
+                    //chew on whatever remains
+                    for (int g = (perThread * me.num_thread_real); g < remainder; g++)
+                    {
+                        //DO SOMETHING
+                        workers.push_back(std::thread([&activeFrames, &me, g]()
                         {
                             //STEP 2a: //solute gathering
-                            SoluteGatherer(&activeFrames[f], f, &me);
-                            
+                            SoluteGatherer(&activeFrames[g], g, &me);
+
                             for (unsigned int j = 0; j < me.solutes_cog_molecules.size(); j++)
                             {
                                 //STEP 2b: gather the non-solvent with respect to the COG of solutes
-                                COGGatherer(&activeFrames[f], me.solutes_cog_molecules[j][0],  me.solutes_cog_molecules[j][1], me.solutes_cog_molecules[j][2], me.solutes_cog_molecules[j][3]);
+                                COGGatherer(&activeFrames[g], me.solutes_cog_molecules(0,j),  me.solutes_cog_molecules(1,j), me.solutes_cog_molecules(2,j), me.solutes_cog_molecules(3,j));
                             }
-
-                            CalculateEigenValuesVectors(&activeFrames[f], &me, &eigenValVec[f], &centerOfGeometry[f]);
-                        }
-                    }));
-                }
-                for (int g = 0; g < workers.size(); g++)
-                {
-                    workers[g].join();
-                }
-                workers.clear();
-                CorrectionSignEigenValuesVectors(&me, &eigenValVec);
-                for (int g = 0; g < me.num_thread_real; g++)
-                {
-                    workers.push_back(std::thread([&activeFrames, &me, g, perThread, &eigenValVec, &centerOfGeometry]()
-                    {
-                        for (int f = (g * perThread); f < ( (g + 1) * perThread); f++)
-                        {
-
-                            CorrectRotationSolute(&activeFrames[f], &me, &eigenValVec[f]);
 
                             if (!me.solvent_skip)
                             {
                                 //STEP 2c: gather the solvent with respect to the COG of solutes
-                                COGGatherer(&activeFrames[f], me.solvent_atoms_first, me.solvent_atoms_last, me.solvent_size, me.solvent_dimension_expansion);
+                                COGGatherer(&activeFrames[g], me.solvent_molecules(0,0), me.solvent_molecules(1,0), me.solvent_molecules(2,0), me.solvent_molecules(3,0));
                             }
 
                             //STEP 2d: correct COG to (0,0,0)
                             if (me.cog_correction)
                             {
-                                for (int j = 0; j < me.atomrecords; j++)
-                                {                                                
-                                    activeFrames[f].x[j] = activeFrames[f].x[j] - activeFrames[f].solute_cog_x;
-                                }
-                                for (int j = 0; j < me.atomrecords; j++)
-                                {                                                
-                                    activeFrames[f].y[j] = activeFrames[f].y[j] - activeFrames[f].solute_cog_y;
-                                }
-                                for (int j = 0; j < me.atomrecords; j++)
-                                {                                                
-                                    activeFrames[f].z[j] = activeFrames[f].z[j] - activeFrames[f].solute_cog_z;
-                                }
+                                activeFrames[g].coordinates.colwise() -= activeFrames[g].solute_cog;
                             }
-                        }
-                    }));
-                }
-                for (int g = 0; g < workers.size(); g++)
-                {
-                    workers[g].join();
-                }
-                workers.clear();
-
-                //chew on whatever remains
-                for (int g = (perThread * me.num_thread_real); g < remainder; g++)
-                {
-                    workers.push_back(std::thread([&activeFrames, &me, g, &eigenValVec, &centerOfGeometry]()
+                        }));
+                    }
+                    for (int g = 0; g < workers.size(); g++)
                     {
-                        //STEP 2a: //solute gathering
-                        SoluteGatherer(&activeFrames[g], g, &me);
+                        workers[g].join();
+                    }
+                    workers.clear();
 
-                        for (unsigned int j = 0; j < me.solutes_cog_molecules.size(); j++)
-                        {
-                            //STEP 2b: gather the non-solvent with respect to the COG of solutes
-                            COGGatherer(&activeFrames[g], me.solutes_cog_molecules[j][0],  me.solutes_cog_molecules[j][1], me.solutes_cog_molecules[j][2], me.solutes_cog_molecules[j][3]);
-                        }
-
-                        CalculateEigenValuesVectors(&activeFrames[g], &me, &eigenValVec[g], &centerOfGeometry[g]);
-                    }));
                 }
-                for (int g = 0; g < workers.size(); g++)
-                {
-                    workers[g].join();
-                }
-                workers.clear(); 
-                CorrectionSignEigenValuesVectors(&me, &eigenValVec);
-                for (int g = (perThread * me.num_thread_real); g < remainder; g++)
-                {
-                    workers.push_back(std::thread([&activeFrames, &me, g, &eigenValVec, &centerOfGeometry]()
-                    {
-                        CorrectRotationSolute(&activeFrames[g], &me, &eigenValVec[g]);
-
-                        if (!me.solvent_skip)
-                        {
-                            //STEP 2c: gather the solvent with respect to the COG of solutes
-                            COGGatherer(&activeFrames[g], me.solvent_atoms_first, me.solvent_atoms_last, me.solvent_size, me.solvent_dimension_expansion);
-                        }
-
-                        //STEP 2d: correct COG to (0,0,0)
-                        if (me.cog_correction)
-                        {
-                            for (int j = 0; j < me.atomrecords; j++)
-                            {                                                
-                                activeFrames[g].x[j] = activeFrames[g].x[j] - activeFrames[g].solute_cog_x;
-                            }
-                            for (int j = 0; j < me.atomrecords; j++)
-                            {                                                
-                                activeFrames[g].y[j] = activeFrames[g].y[j] - activeFrames[g].solute_cog_y;
-                            }
-                            for (int j = 0; j < me.atomrecords; j++)
-                            {                                                
-                                activeFrames[g].z[j] = activeFrames[g].z[j] - activeFrames[g].solute_cog_z;
-                            }
-                        }
-                    }));
-                }
-                for (int g = 0; g < workers.size(); g++)
-                {
-                    workers[g].join();
-                }
-                workers.clear();
-
 
                 if (outfileThread.joinable())
                 {
@@ -2121,7 +1437,7 @@ int main(int argc, char* argv[])
                 //write out all frames sequentially
                 for (int g = 0; g < activeFrame_counter; g++)
                 {
-                    //WriteOutFrame(&activeFrames[g], outfile, writeAtomRecordsCount, me.outformat, me.cog_write);
+                    //DO SOMETHING
                     WriteOutFrame(&activeFrames[g], outfile, &me);
                 }
             }
