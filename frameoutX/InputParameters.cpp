@@ -113,7 +113,7 @@ void InputParameters::ParseInputFile(Structs::InputParametersFrameout *this_para
         //loops through solvents
         //std::cout << xmlNodeGetContent(xpathObj->nodesetval->nodeTab[0]) << std::endl;
         //get all COG solutes
-        this_params->solute_cog_molecules.resize(5, COGSolute->nodesetval->nodeNr); 
+        this_params->solute_cog_molecules.resize(6, COGSolute->nodesetval->nodeNr); 
         for (int j = 0; j < COGSolute->nodesetval->nodeNr; j++)
         {
             xpathCtx->node = COGSolute->nodesetval->nodeTab[j];
@@ -142,7 +142,7 @@ void InputParameters::ParseInputFile(Structs::InputParametersFrameout *this_para
         //loops through solvents
         //std::cout << xmlNodeGetContent(xpathObj->nodesetval->nodeTab[0]) << std::endl;
         //get all ions
-        this_params->ion_molecules.resize(5, Ions->nodesetval->nodeNr); 
+        this_params->ion_molecules.resize(6, Ions->nodesetval->nodeNr); 
         for (int j = 0; j < Ions->nodesetval->nodeNr; j++)
         {
             std::cout << j << std::endl;
@@ -171,7 +171,7 @@ void InputParameters::ParseInputFile(Structs::InputParametersFrameout *this_para
         xpath = "./topology/solutes/solute";
         xmlXPathObjectPtr solutes = xmlXPathEvalExpression(BAD_CAST xpath.c_str(), xpathCtx);
         //get all solutes
-        this_params->solute_molecules.resize(4, solutes->nodesetval->nodeNr);
+        this_params->solute_molecules.resize(5, solutes->nodesetval->nodeNr);
 
         for (int j = 0; j < solutes->nodesetval->nodeNr; j++)
         {
