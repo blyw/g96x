@@ -26,6 +26,8 @@
 //main program
 int main(int argc, char* argv[])
 {
+    Eigen::initParallel();
+
 #ifdef DEBUG
     std::cout << "--->get CLI arguments" << std::endl;
 #endif // DEBUG
@@ -459,7 +461,7 @@ int main(int argc, char* argv[])
                                 Gather::SoluteMolecule(&currentFrame, &me, &grids.SolutesGatherer);
                                 Gather::SoluteCenterOfGeometry(&currentFrame, &me, &grids.SoluteCOGGatherer);
                                 Gather::IonsCenterOfGeometry(&currentFrame, &me, &grids.IonsGatherer);
-                                Gather::Solvent(&currentFrame, &me, &grids.SolventGatherer);
+                                Gather::Solvent(&currentFrame, &me, &grids.SolventGatherer, 0.5);
                                 me.correction_translation = true;
                                 currentFrame.coordinates.colwise() -= currentFrame.solute_cog;
                                 rotationalFitFrame = currentFrame;
@@ -499,13 +501,21 @@ int main(int argc, char* argv[])
                                                     {
                                                         activeFrames[i_frames].coordinates.colwise() -= activeFrames[i_frames].solute_cog;
                                                         activeFrames[i_frames].solute_cog.setZero();
+                                                        activeFrames[i_frames].solute_cog_sum.setZero();
+                                                    }
+                                                    Gather::IonsCenterOfGeometry(&activeFrames[i_frames], &me, &grids.IonsGatherer);
+                                                    if (me.solvent_sphere)
+                                                    {                                                        
+                                                        Gather::Solvent(&activeFrames[i_frames], &me, &grids.SolventGatherer, me.solvent_sphere_cut_off);
+                                                    }
+                                                    if (!me.solvent_sphere)
+                                                    {                                                        
+                                                        Gather::Solvent(&activeFrames[i_frames], &me, &grids.SolventGatherer);
                                                     }
                                                     if (me.correction_rotation)
                                                     {
                                                         FrameGeometry::CorrectionRotational(&activeFrames[i_frames], &rotationalFitFrame, &me);
                                                     }
-                                                    Gather::IonsCenterOfGeometry(&activeFrames[i_frames], &me, &grids.IonsGatherer);
-                                                    Gather::Solvent(&activeFrames[i_frames], &me, &grids.SolventGatherer);
                                                 }
                                             });	
                                         }
@@ -643,7 +653,6 @@ int main(int argc, char* argv[])
 
                 if (me.gather)
                 {
-
                     try
                     {
                         for (int i_threads = 0; i_threads < me.num_thread_real; i_threads++)
@@ -658,13 +667,21 @@ int main(int argc, char* argv[])
                                     {
                                         activeFrames[i_frames].coordinates.colwise() -= activeFrames[i_frames].solute_cog;
                                         activeFrames[i_frames].solute_cog.setZero();
+                                        activeFrames[i_frames].solute_cog_sum.setZero();
+                                    }
+                                    Gather::IonsCenterOfGeometry(&activeFrames[i_frames], &me, &grids.IonsGatherer);
+                                    if (me.solvent_sphere)
+                                    {
+                                        Gather::Solvent(&activeFrames[i_frames], &me, &grids.SolventGatherer, me.solvent_sphere_cut_off);
+                                    }
+                                    if (!me.solvent_sphere)
+                                    {
+                                        Gather::Solvent(&activeFrames[i_frames], &me, &grids.SolventGatherer);
                                     }
                                     if (me.correction_rotation)
                                     {
                                         FrameGeometry::CorrectionRotational(&activeFrames[i_frames], &rotationalFitFrame, &me);
                                     }
-                                    Gather::IonsCenterOfGeometry(&activeFrames[i_frames], &me, &grids.IonsGatherer);
-                                    Gather::Solvent(&activeFrames[i_frames], &me, &grids.SolventGatherer);
                                 }
                             });	
                         }
@@ -691,10 +708,10 @@ int main(int argc, char* argv[])
                     delete[] myThreads;
 
                     //spawn one thread per remaining frame
-                    std::thread *myThreadsRemainders = new std::thread[activeFrame_counter - (perThread * me.num_thread_real)];
-                    for (int i_remainders = 0; i_remainders < (activeFrame_counter - (perThread * me.num_thread_real)); i_remainders++)
+                    std::vector<std::thread> myThreadsRemainders;
+                    for (int i_remainders = (perThread * me.num_thread_real) - 1; i_remainders < activeFrame_counter; i_remainders++)
                     {
-                        myThreadsRemainders[i_remainders] = (std::thread([&activeFrames, &rotationalFitFrame, &me, i_remainders, &grids]()
+                        myThreadsRemainders.push_back((std::thread([&activeFrames, &rotationalFitFrame, &me, i_remainders, &grids]()
                         {
                             Gather::SoluteMolecule(&activeFrames[i_remainders], &me, &grids.SolutesGatherer);
                             Gather::SoluteCenterOfGeometry(&activeFrames[i_remainders], &me, &grids.SoluteCOGGatherer);
@@ -702,24 +719,30 @@ int main(int argc, char* argv[])
                             {
                                 activeFrames[i_remainders].coordinates.colwise() -= activeFrames[i_remainders].solute_cog;
                                 activeFrames[i_remainders].solute_cog.setZero();
+                                activeFrames[i_remainders].solute_cog_sum.setZero();
+                            }
+                            Gather::IonsCenterOfGeometry(&activeFrames[i_remainders], &me, &grids.IonsGatherer);
+                            if (me.solvent_sphere)
+                            {
+                                Gather::Solvent(&activeFrames[i_remainders], &me, &grids.SolventGatherer, me.solvent_sphere_cut_off);
+                            }
+                            if (!me.solvent_sphere)
+                            {
+                                Gather::Solvent(&activeFrames[i_remainders], &me, &grids.SolventGatherer);
                             }
                             if (me.correction_rotation)
                             {
                                 FrameGeometry::CorrectionRotational(&activeFrames[i_remainders], &rotationalFitFrame, &me);
                             }
-                            Gather::IonsCenterOfGeometry(&activeFrames[i_remainders], &me, &grids.IonsGatherer);
-                            Gather::Solvent(&activeFrames[i_remainders], &me, &grids.SolventGatherer);
-
-                        }));	
+                        })));	
                     }
 
                     //wait for all threads to finish
-                    for(int i_remainder = 0; i_remainder < (activeFrame_counter - (perThread * me.num_thread_real)); i_remainder++)
+                    for(int i_remainder = 0; i_remainder < myThreadsRemainders.size(); i_remainder++)
                     {
                         myThreadsRemainders[i_remainder].join();
                     }
-
-                    delete[] myThreadsRemainders;
+                    myThreadsRemainders.clear();
                 }
             }
 
@@ -737,11 +760,8 @@ int main(int argc, char* argv[])
                 {
                     for (int x = 0; x < activeFrame_counter; x++)
                     {
-                        for (int x = 0; x < activeFrame_counter; x++)
-                        {
-                            //DO SOMETHING
-                            FrameGeometry::WriteOutFrame(&activeFrames[x], outfile, &me);
-                        }
+                        //DO SOMETHING
+                        FrameGeometry::WriteOutFrame(&activeFrames[x], outfile, &me);
                     }
                 });
             }

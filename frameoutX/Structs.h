@@ -98,6 +98,10 @@ public:
         bool correction_rotation;
         //disable the gathering routing completely
         bool gather;
+
+        //solvent sphere
+        bool solvent_sphere;
+        double solvent_sphere_cut_off;
     };
 
     //Holds space-time-related properties of a given simulation frame 
@@ -137,6 +141,8 @@ public:
 
         //how much the current box should be shifted to be in the similar space as the previous box
         Eigen::Vector3i init_shift;
+
+        bool writeout;
     };
     
     //Holds Newtonian properties of a given simulation frame 

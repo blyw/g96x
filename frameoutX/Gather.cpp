@@ -7,6 +7,7 @@
 #include <Eigen/Dense>
 #include <iomanip>
 #include <iostream>
+#include <math.h>
 
 Gather::Gather(void)
 {
@@ -288,6 +289,7 @@ void Gather::SoluteCenterOfGeometry(Structs::FrameGeometric *framedata, Structs:
         molecule_start = me->solute_cog_molecules(0,i_molecule_num);
         molecule_end = me->solute_cog_molecules(1,i_molecule_num);
         molecule_size = me->solute_cog_molecules(2,i_molecule_num);
+        framedata->solute_cog_count += (molecule_end - molecule_start) + 1;
         //std::cout << molecule_start << " " << molecule_end << " " << molecule_size << std::endl;
 
         //the first atom in a molecule with respect to the center of geometry of solutes
@@ -455,12 +457,6 @@ void Gather::IonsCenterOfGeometry(Structs::FrameGeometric *framedata, Structs::I
     //if solute molecules are defined than calculate the COG for the frame and update the variable
     if (me->ion_molecules.cols() > 0)
     {
-        //use this center of geometry for the entire frame
-        //FIXXXXXXXXXXXXX
-        //framedata->solute_cog_sum = coordinates_sum;
-        //framedata->solute_cog(0) = framedata->solute_cog_sum(0)/(framedata->solute_cog_count);
-        //framedata->solute_cog(1) = framedata->solute_cog_sum(1)/(framedata->solute_cog_count);
-        //framedata->solute_cog(2) = framedata->solute_cog_sum(2)/(framedata->solute_cog_count);
         framedata->solute_cog = framedata->solute_cog_sum.array()/(framedata->solute_cog_count);
     }
 }
@@ -500,6 +496,7 @@ void Gather::Solvent(Structs::FrameGeometric *framedata, Structs::InputParameter
         molecule_start = me->solvent_molecules(0,i_molecule_num);
         molecule_end = me->solvent_molecules(1,i_molecule_num);
         molecule_size = me->solvent_molecules(2,i_molecule_num);
+        framedata->solute_cog_count += (molecule_end - molecule_start) + 1;
         //std::cout << molecule_start << " " << molecule_end << " " << molecule_size << std::endl;
 
         //the first atom in a molecule with respect to the center of geometry of solutes
@@ -555,6 +552,147 @@ void Gather::Solvent(Structs::FrameGeometric *framedata, Structs::InputParameter
                 //shift the coordinates of the atom i according to the frame-shift determined in preceeding code
                 framedata->coordinates.col(i_atom) += framedata->box_length.cwiseProduct(min_shift.cast<double>());
             }
+        }
+    }
+}
+
+void Gather::Solvent(Structs::FrameGeometric *framedata, Structs::InputParametersFrameout *me, std::vector<Eigen::Matrix<int, 3, Eigen::Dynamic>> *grid, double solvent_sphere_radius)
+{
+    //std::cout << framedata->solute_cog_sum.array() << std::endl;
+    //std::cout << framedata->solute_cog_count << std::endl;
+    //std::cout << framedata->solute_cog << std::endl << std::endl;
+
+    //where to stop applying correction
+    int last_atom = 0;
+
+    //apply correction to the last of the solutes
+    if ((me->solute_molecules.cols() > 0 && me->solute_cog_molecules.cols() > 0))
+    {
+        last_atom = me->solute_cog_molecules(1,me->solute_cog_molecules.cols()-1);
+    }
+    //apply correction to the essentail solutes
+    else if ((me->solute_molecules.cols() > 0))
+    {
+        last_atom = me->solute_molecules(1,me->solute_molecules.cols()-1);
+    }
+    //if ions are not present, apply correction based on atoms up to the first solvent
+    else
+    {
+        last_atom = me->solvent_molecules(0,0) - 1;
+    }
+
+    //get the x, y or z value in solutes and ions
+    double cut_off_radius_solvent = (framedata->coordinates.leftCols(last_atom) - framedata->solute_cog).cwiseAbs2().colwise().sum().maxCoeff();
+    cut_off_radius_solvent = sqrt(cut_off_radius_solvent);
+    cut_off_radius_solvent += solvent_sphere_radius;
+    cut_off_radius_solvent = cut_off_radius_solvent*cut_off_radius_solvent;
+    bool solvent_include = true;
+
+    //these two varaible are required to ensure that gathering will always occured
+    double shortestDistance = 1e20;
+    double currentDistance = 0;
+
+    Eigen::Vector3i min_shift(0,0,0);
+
+    //use a for finding minimum distances in matrix/vector
+    Eigen::MatrixXd::Index minIndex;
+
+    //cut-off is derived from (longest bond)
+    //the cut-off is used to limit the search space
+    double cut_off = me->distance_cut_off*me->distance_cut_off;
+    //initialize some variables used for defining molecules in gathering process
+    int molecule_start = 0, molecule_end = 0, molecule_start_previous = 0, molecule_size = 0;
+
+    //initiallize variables used for loops
+    int i_molecule_num = 0, i_atom = 0, j_atom = 0;
+
+    //for center of geometry of all solute molecules calculation
+    //at the end of the frame this holds sum(x,y,z) 
+    Eigen::Vector3d coordinates_sum(0,0,0);
+
+    //cross-reference gathering
+    for (i_molecule_num = 0; i_molecule_num < me->solvent_molecules.cols(); i_molecule_num++)
+    {
+        //define first atom, last atom and number of periodic copies of a solute molecule
+        molecule_start = me->solvent_molecules(0,i_molecule_num);
+        molecule_end = me->solvent_molecules(1,i_molecule_num);
+        molecule_size = me->solvent_molecules(2,i_molecule_num);
+        framedata->solute_cog_count += (molecule_end - molecule_start) + 1;
+        //std::cout << molecule_start << " " << molecule_end << " " << molecule_size << std::endl;
+
+        //the first atom in a molecule with respect to the center of geometry of solutes
+
+        for (int i_set = (molecule_start-1); i_set < molecule_end; i_set+=molecule_size)
+        { 
+            solvent_include = true;
+            //reset the value for the shift applied
+            min_shift.setZero();
+            //molecule_start_previous is re-defined each time a solute molecule is gathered
+
+            currentDistance = (((((
+                (*grid)[i_molecule_num]
+            ).cast<double>().array().colwise() * framedata->box_length.array()
+                ).matrix().colwise() + framedata->coordinates.col(i_set)
+                ).colwise() - framedata->solute_cog
+                ).cwiseAbs2().colwise().sum().minCoeff(&minIndex)
+                );
+            //find the shift required to acquire the shortest distance
+            min_shift = ((*grid)[i_molecule_num]).col(minIndex).cast<int>();
+
+            //shift the coordinates of the atom in the original frame
+            framedata->coordinates.col(i_set) += framedata->box_length.cwiseProduct(min_shift.cast<double>());
+
+            if ((currentDistance) > cut_off_radius_solvent)
+            {
+                //framedata->coordinates.col(i_set).setZero();
+                solvent_include = false;
+            }
+
+            //std::cout << "\t\t" << currentDistance << " " << cut_off_radius_solvent << " " << ((currentDistance) > cut_off_radius_solvent) << solvent_include << std::endl;
+
+            //now that the first atom in the current solute is gathered correctly
+            //the rest of the atoms will be gathered with respect to the first atom of the current solute.
+            //gather solute molecule
+            for (int i_atom = (i_set+1); i_atom < i_set+molecule_size; i_atom++)
+            {	
+                shortestDistance = 1e20;
+                currentDistance = 0;			
+                min_shift.setZero();
+                //reverse search from coordinate closest to already-in-list atoms of current solute molecule
+                for (j_atom = (i_atom - 1); j_atom >= (i_set); j_atom--)
+                {
+                    currentDistance = (((((
+                        (*grid)[i_molecule_num]
+                    ).cast<double>().array().colwise() * framedata->box_length.array()
+                        ).matrix().colwise() + framedata->coordinates.col(i_atom)
+                        ).colwise() - framedata->coordinates.col(j_atom)
+                        ).cwiseAbs2().colwise().sum().minCoeff(&minIndex)
+                        );
+                    //find the shift required to acquire the shortest distance
+                    if (currentDistance < shortestDistance) {
+                        shortestDistance = currentDistance;
+                        min_shift = ((*grid)[i_molecule_num]).col(minIndex).cast<int>();
+                        if (shortestDistance < cut_off)
+                        {
+                            break;
+                        }
+                    }
+                }
+
+                //shift the coordinates of the atom i according to the frame-shift determined in preceeding code
+                framedata->coordinates.col(i_atom) += framedata->box_length.cwiseProduct(min_shift.cast<double>());
+
+                if (!solvent_include)
+                {
+                    //framedata->coordinates.col(i_atom).setZero();
+                }
+            }
+
+            if (!solvent_include)
+            {
+                framedata->coordinates.block(0,i_set,3, 3).colwise() += framedata->box_length;
+            }
+            //std::cout << framedata->coordinates.block(0,i_set,3, 3) << std::endl;
         }
     }
 }

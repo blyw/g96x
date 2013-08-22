@@ -118,24 +118,25 @@ void InputParameters::ParseInputFile(Structs::InputParametersFrameout *this_para
         {
             xpathCtx->node = COGSolute->nodesetval->nodeTab[j];
             //get first atom of COG solute
-            this_params->solute_cog_molecules(0,i) = atoi(XPathGetText("./@first_atom", xpathCtx));
+            this_params->solute_cog_molecules(0,j) = atoi(XPathGetText("./@first_atom", xpathCtx));
             //get last atom of COG solute
-            this_params->solute_cog_molecules(1,i) = atoi(XPathGetText("./@last_atom", xpathCtx));
+            this_params->solute_cog_molecules(1,j) = atoi(XPathGetText("./@last_atom", xpathCtx));
             //get number of atom of COG solute
-            this_params->solute_cog_molecules(2,i) = atoi(XPathGetText("./number_of_atoms", xpathCtx));
+            this_params->solute_cog_molecules(2,j) = atoi(XPathGetText("./number_of_atoms", xpathCtx));
             //get images factor
-            this_params->solute_cog_molecules(3,i) = atoi(XPathGetText("./dimension_search", xpathCtx));
+            this_params->solute_cog_molecules(3,j) = atoi(XPathGetText("./dimension_search", xpathCtx));
             //gather this molecule with respect tot this atom
-            this_params->solute_cog_molecules(4,i) = atoi(XPathGetText("./@init_atom", xpathCtx));
+            this_params->solute_cog_molecules(4,j) = atoi(XPathGetText("./@init_atom", xpathCtx));
             //skip or keep COG solute
-            this_params->solute_cog_molecules(5,i) = atoi(XPathGetText("./@skip", xpathCtx));
+            this_params->solute_cog_molecules(5,j) = std::strcmp(XPathGetText("./@skip", xpathCtx), "true") == 0;
         }
         xmlXPathFreeObject(COGSolute);
 
 #ifdef DEBUG
         std::cout << "got cog_solutes parameters" << std::endl;
 #endif // DEBUG
-
+        
+        xpathCtx->node = xpathObj->nodesetval->nodeTab[i];
         //get solute (cog) definitions
         xpath = "./topology/ions/ion";
         xmlXPathObjectPtr Ions = xmlXPathEvalExpression(BAD_CAST xpath.c_str(), xpathCtx);
@@ -143,22 +144,23 @@ void InputParameters::ParseInputFile(Structs::InputParametersFrameout *this_para
         //std::cout << xmlNodeGetContent(xpathObj->nodesetval->nodeTab[0]) << std::endl;
         //get all ions
         this_params->ion_molecules.resize(6, Ions->nodesetval->nodeNr); 
+        //std::cout << Ions->nodesetval->nodeNr << std::endl;
         for (int j = 0; j < Ions->nodesetval->nodeNr; j++)
         {
             std::cout << j << std::endl;
             xpathCtx->node = Ions->nodesetval->nodeTab[j];
             //get first atom of COG solute
-            this_params->ion_molecules(0,i) = atoi(XPathGetText("./@first_atom", xpathCtx));
+            this_params->ion_molecules(0,j) = atoi(XPathGetText("./@first_atom", xpathCtx));
             //get last atom of COG solute
-            this_params->ion_molecules(1,i) = atoi(XPathGetText("./@last_atom", xpathCtx));
+            this_params->ion_molecules(1,j) = atoi(XPathGetText("./@last_atom", xpathCtx));
             //get number of atom of COG solute
-            this_params->ion_molecules(2,i) = atoi(XPathGetText("./number_of_atoms", xpathCtx));
+            this_params->ion_molecules(2,j) = atoi(XPathGetText("./number_of_atoms", xpathCtx));
             //get images factor
-            this_params->ion_molecules(3,i) = atoi(XPathGetText("./dimension_search", xpathCtx));
+            this_params->ion_molecules(3,j) = atoi(XPathGetText("./dimension_search", xpathCtx));
             //gather this molecule with respect tot this atom
-            this_params->ion_molecules(4,i) = atoi(XPathGetText("./@init_atom", xpathCtx));
+            this_params->ion_molecules(4,j) = atoi(XPathGetText("./@init_atom", xpathCtx));
             //skip or keep COG solute
-            this_params->ion_molecules(5,i) = atoi(XPathGetText("./@skip", xpathCtx));
+            this_params->ion_molecules(5,j) = std::strcmp(XPathGetText("./@skip", xpathCtx), "true") == 0;
         }
         xmlXPathFreeObject(Ions);
 
@@ -185,7 +187,7 @@ void InputParameters::ParseInputFile(Structs::InputParametersFrameout *this_para
             //gather this molecule with respect tot this atom
             this_params->solute_molecules(3,j) = atoi(XPathGetText("./@init_atom", xpathCtx));
             //skip or keep solute
-            this_params->solute_molecules(4,j) = atoi(XPathGetText("./@skip", xpathCtx));
+            this_params->solute_molecules(4,j) = std::strcmp(XPathGetText("./@skip", xpathCtx), "true") == 0;
         };
         this_params->solute_count = this_params->solute_molecules.cols();
         xmlXPathFreeObject(solutes);
@@ -197,15 +199,18 @@ void InputParameters::ParseInputFile(Structs::InputParametersFrameout *this_para
         //read the variables section
         xpathCtx->node = xpathObj->nodesetval->nodeTab[i];
         //to gather or not
-        this_params->gather = atoi(XPathGetText("./analysis/frameout/@gather", xpathCtx));
+        this_params->gather = std::strcmp(XPathGetText("./analysis/frameout/@gather", xpathCtx), "true") == 0;
         //write out cog or not
-        this_params->cog_write = atoi(XPathGetText("./analysis/frameout/cog_write", xpathCtx));
+        this_params->cog_write = std::strcmp(XPathGetText("./analysis/frameout/cog_write", xpathCtx), "true") == 0;
         //correct for translation
-        this_params->correction_translation = atoi(XPathGetText("./analysis/frameout/correction_translation", xpathCtx));
+        this_params->correction_translation = std::strcmp(XPathGetText("./analysis/frameout/correction_translation", xpathCtx), "true") == 0;
         //correct for rotation
-        this_params->correction_rotation = atoi(XPathGetText("./analysis/frameout/correction_rotation", xpathCtx));
+        this_params->correction_rotation = std::strcmp(XPathGetText("./analysis/frameout/correction_rotation", xpathCtx), "true") == 0;
         //get distance cut
         this_params->distance_cut_off = atof(XPathGetText("./analysis/frameout/distance_cut_off", xpathCtx));
+        //set solventsphere truncation
+        this_params->solvent_sphere = std::strcmp(XPathGetText("./analysis/frameout/solvent_sphere", xpathCtx), "true") == 0;
+        this_params->solvent_sphere_cut_off = atof(XPathGetText("./analysis/frameout/solvent_sphere/@cut_off", xpathCtx));
 
 #ifdef DEBUG
         std::cout << "got analysis parameters" << std::endl;
@@ -295,24 +300,29 @@ void InputParameters::PrintInputParametersFrameOut(Structs::InputParametersFrame
     std::cout << "  solutes cog                     : " << std::endl;
     for (int i = 0; i < me.solute_cog_molecules.cols(); i++)
     {
-        std::cout << "                                    " << me.solute_cog_molecules(0,i) << " " << me.solute_cog_molecules(1,i) << " " << me.solute_cog_molecules(2,i) << " " << me.solute_cog_molecules(3,i) <<  " " << me.solute_cog_molecules(4,i) << std::endl;
+        std::cout << "                                    " << me.solute_cog_molecules(0,i) << " " << me.solute_cog_molecules(1,i) << " " << me.solute_cog_molecules(2,i) << " " << me.solute_cog_molecules(3,i) <<  " " << me.solute_cog_molecules(4,i) << " " << me.solute_cog_molecules(5,i) << std::endl;
     }
     std::cout << "  number of solutes               : " << me.solute_count << std::endl;
     std::cout << "  solutes atom numbering          : " << std::endl;
     for (int i = 0; i < me.solute_molecules.cols(); i++)
     {
-        std::cout << "                                    " << me.solute_molecules(0,i) << " " << me.solute_molecules(1,i) << " " << me.solute_molecules(2,i) << " " << me.solute_molecules(3,i) << std::endl;
+        std::cout << "                                    " << me.solute_molecules(0,i) << " " << me.solute_molecules(1,i) << " " << me.solute_molecules(2,i) << " " << me.solute_molecules(3,i) << " " << me.solute_molecules(4,i) << std::endl;
     }
-    std::cout << "  ions cog                        : " << std::endl;
+    std::cout << "  number of ions                  : " << me.ion_molecules.cols() << std::endl;
+    std::cout << "  ions atom numbering             : " << std::endl;
     for (int i = 0; i < me.ion_molecules.cols(); i++)
     {
-        std::cout << "                                    " << me.ion_molecules(0,i) << " " << me.ion_molecules(1,i) << " " << me.ion_molecules(2,i) << " " << me.ion_molecules(3,i) <<  " " << me.ion_molecules(4,i) << std::endl;
+        std::cout << "                                    " << me.ion_molecules(0,i) << " " << me.ion_molecules(1,i) << " " << me.ion_molecules(2,i) << " " << me.ion_molecules(3,i) <<  " " << me.ion_molecules(4,i) << " " << me.ion_molecules(5,i) << std::endl;
     }
     std::cout << "  skip ions                       : " << me.ions_skip << std::endl;
     std::cout << "  solvent cog images              : " << me.solvent_molecules(3,0) << std::endl;
     std::cout << "  solvent size                    : " << me.solvent_molecules(2,0) << std::endl;
     std::cout << "  trc refernce file               : " << me.trc_reference << std::endl;  
     std::cout << "  gathering enabled               : " << me.gather << std::endl;  
+    std::cout << "  solvent sphere enabled          : " << me.solvent_sphere << std::endl;  
+    std::cout << "  solvent sphere cut-off          : " << me.solvent_sphere_cut_off << std::endl;  
+    std::cout << "  comment                         : set center of geometry in viewer to (0,0,0);" << std::endl;
+    std::cout << "                                    vmd: molinfo 1 set center \"{0.0 0.0 0.0}\"" << std::endl;
 }
 
 //print out the parameters gained from parsing the input file
@@ -344,24 +354,29 @@ void InputParameters::PrintInputParametersFrameOut(Structs::InputParametersFrame
     outfile << "#   solutes cog                     : " << std::endl;
     for (int i = 0; i < me.solute_cog_molecules.cols(); i++)
     {
-        outfile << "#                                     " << me.solute_cog_molecules(0,i) << " " << me.solute_cog_molecules(1,i) << " " << me.solute_cog_molecules(2,i) << " " << me.solute_cog_molecules(3,i) <<  " " << me.solute_cog_molecules(4,i) << std::endl;
+        outfile << "#                                     " << me.solute_cog_molecules(0,i) << " " << me.solute_cog_molecules(1,i) << " " << me.solute_cog_molecules(2,i) << " " << me.solute_cog_molecules(3,i) <<  " " << me.solute_cog_molecules(4,i) << " " << me.solute_cog_molecules(5,i) << std::endl;
     }
     outfile << "#   number of solutes               : " << me.solute_count << std::endl;
     outfile << "#   solutes atom numbering          : " << std::endl;
     for (int i = 0; i < me.solute_molecules.cols(); i++)
     {
-        outfile << "#                                     " << me.solute_molecules(0,i) << " " << me.solute_molecules(1,i) << " " << me.solute_molecules(2,i) << " " << me.solute_molecules(3,i) << std::endl;
+        outfile << "#                                     " << me.solute_molecules(0,i) << " " << me.solute_molecules(1,i) << " " << me.solute_molecules(2,i) << " " << me.solute_molecules(3,i) <<  " " << me.solute_molecules(4,i) << std::endl;
     }
-    outfile << "#   ions cog                        : " << std::endl;
+    outfile << "#   number of ions                  : " << me.ion_molecules.cols() << std::endl;
+    outfile << "#   ions atom numbering             : " << std::endl;
     for (int i = 0; i < me.ion_molecules.cols(); i++)
     {
-        outfile << "#                                     " << me.ion_molecules(0,i) << " " << me.ion_molecules(1,i) << " " << me.ion_molecules(2,i) << " " << me.ion_molecules(3,i) <<  " " << me.ion_molecules(4,i) << std::endl;
+        outfile << "#                                     " << me.ion_molecules(0,i) << " " << me.ion_molecules(1,i) << " " << me.ion_molecules(2,i) << " " << me.ion_molecules(3,i) <<  " " << me.ion_molecules(4,i) << " " << me.ion_molecules(5,i) << std::endl;
     }
     outfile << "#   skip ions                       : " << me.ions_skip << std::endl;
     outfile << "#   solvent cog images              : " << me.solvent_molecules(3,0) << std::endl;
     outfile << "#   solvent size                    : " << me.solvent_molecules(2,0) << std::endl;
     outfile << "#   trc refernce file (prefix)      : " << me.trc_reference << std::endl;  
     outfile << "#   gathering enabled               : " << me.gather << std::endl;  
+    outfile << "#   solvent sphere enabled          : " << me.solvent_sphere << std::endl;  
+    outfile << "#   solvent sphere cut-off          : " << me.solvent_sphere_cut_off << std::endl;  
+    outfile << "#   comment                         : set center of geometry in viewer to (0,0,0);" << std::endl;
+    outfile << "#                                     vmd: molinfo 1 set center \"{0.0 0.0 0.0}\"" << std::endl;
 }
 
 //print out the parameters gained from parsing the input file
@@ -392,22 +407,27 @@ void InputParameters::PrintInputParametersFrameOut(Structs::InputParametersFrame
     outfile << "#   solutes cog                     : " << std::endl;
     for (int i = 0; i < me.solute_cog_molecules.cols(); i++)
     {
-        outfile << "#                                     " << me.solute_cog_molecules(0,i) << " " << me.solute_cog_molecules(1,i) << " " << me.solute_cog_molecules(2,i) << " " << me.solute_cog_molecules(3,i) <<  " " << me.solute_cog_molecules(4,i) << std::endl;
+        outfile << "#                                     " << me.solute_cog_molecules(0,i) << " " << me.solute_cog_molecules(1,i) << " " << me.solute_cog_molecules(2,i) << " " << me.solute_cog_molecules(3,i) <<  " " << me.solute_cog_molecules(4,i) << " " << me.solute_cog_molecules(5,i) << std::endl;
     }
     outfile << "#   number of solutes               : " << me.solute_count << std::endl;
     outfile << "#   solutes atom numbering          : " << std::endl;
     for (int i = 0; i < me.solute_molecules.cols(); i++)
     {
-        outfile << "#                                     " << me.solute_molecules(0,i) << " " << me.solute_molecules(1,i) << " " << me.solute_molecules(2,i) << " " << me.solute_molecules(3,i) << std::endl;
+        outfile << "#                                     " << me.solute_molecules(0,i) << " " << me.solute_molecules(1,i) << " " << me.solute_molecules(2,i) << " " << me.solute_molecules(3,i) << " " << me.solute_molecules(4,i) << std::endl;
     }
-    outfile << "#   ions cog                        : " << std::endl;
+    outfile << "#   number of ions                  : " << me.ion_molecules.cols() << std::endl;
+    outfile << "#   ions atom numbering             : " << std::endl;
     for (int i = 0; i < me.ion_molecules.cols(); i++)
     {
-        outfile << "#                                     " << me.ion_molecules(0,i) << " " << me.ion_molecules(1,i) << " " << me.ion_molecules(2,i) << " " << me.ion_molecules(3,i) <<  " " << me.ion_molecules(4,i) << std::endl;
+        outfile << "#                                     " << me.ion_molecules(0,i) << " " << me.ion_molecules(1,i) << " " << me.ion_molecules(2,i) << " " << me.ion_molecules(3,i) <<  " " << me.ion_molecules(4,i) << " " << me.ion_molecules(5,i) << std::endl;
     }
     outfile << "#   skip ions                       : " << me.ions_skip << std::endl;
     outfile << "#   solvent cog images              : " << me.solvent_molecules(3,0) << std::endl;
     outfile << "#   solvent size                    : " << me.solvent_molecules(2,0) << std::endl;
     outfile << "#   trc refernce file               : " << me.trc_reference << std::endl;  
     outfile << "#   gathering enabled               : " << me.gather << std::endl;  
+    outfile << "#   solvent sphere enabled          : " << me.solvent_sphere << std::endl;  
+    outfile << "#   solvent sphere cut-off          : " << me.solvent_sphere_cut_off << std::endl;  
+    outfile << "#   comment                         : set center of geometry in viewer to (0,0,0); " << std::endl;
+    outfile << "#                                     vmd: molinfo 1 set center \"{0.0 0.0 0.0}\"" << std::endl;
 }

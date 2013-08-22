@@ -82,7 +82,7 @@ void FrameGeometry::TrcReferenceFrame(std::vector<std::string> *prefix, std::str
     //check if it is possible to read file
     if (!infile)
     {
-        std::cerr << "cannot open input file" << "\n";
+        std::cerr << "cannot open reference input file" << "\n";
     }
     else {
         //read line by line as string while not end-of-file
@@ -213,7 +213,8 @@ void FrameGeometry::WriteOutFrame(Structs::FrameGeometric *framedata, gz::ogzstr
             //56 - 66       LString       sGroup         Space  group.
             //67 - 70       Integer       z              Z value.
             //CRYST1    1.000    1.000    1.000  90.00  90.00  90.00 P 1           1
-            outfile << "CRYST " 
+            outfile << std::fixed << std::setprecision(9);
+            outfile << "CRYST1" 
                 << std::setw(9) << std::setprecision(3) << framedata->box_length.x()*10
                 << std::setw(9) << std::setprecision(3) << framedata->box_length.y()*10
                 << std::setw(9) << std::setprecision(3) << framedata->box_length.z()*10
@@ -232,6 +233,8 @@ void FrameGeometry::WriteOutFrame(Structs::FrameGeometric *framedata, gz::ogzstr
                     {
                         if (i>=temp_fix[ii] && i<=temp_fix[ii+1])
                         {
+                            //20130819                                                     
+
                             //quickfix
                             //    1 ASN   H1         1    1.021435895    2.079909498    0.623854235
                             //ATOM      1  N   THR A   1      -0.313  18.726  33.523  1.00 21.00           N
@@ -265,45 +268,49 @@ void FrameGeometry::WriteOutFrame(Structs::FrameGeometric *framedata, gz::ogzstr
                                 << std::setw(6) << std::setprecision(2) << 1.0
                                 << std::setw(6) << std::setprecision(2) << 1.0 << "\n"                
                                 << std::flush;
+                            //20130819   
                         }
                     }
                 }
                 else
                 {
-                    //quickfix
-                    //    1 ASN   H1         1    1.021435895    2.079909498    0.623854235
-                    //ATOM      1  N   THR A   1      -0.313  18.726  33.523  1.00 21.00           N
-                    // 1 -  6        Record name   "ATOM  "
-                    // 7 - 11        Integer       serial       Atom  serial number.
-                    //13 - 16        Atom          name         Atom name.
-                    //17             Character     altLoc       Alternate location indicator.
-                    //18 - 20        Residue name  resName      Residue name.
-                    //22             Character     chainID      Chain identifier.
-                    //23 - 26        Integer       resSeq       Residue sequence number.
-                    //27             AChar         iCode        Code for insertion of residues.
-                    //31 - 38        Real(8.3)     x            Orthogonal coordinates for X in Angstroms.
-                    //39 - 46        Real(8.3)     y            Orthogonal coordinates for Y in Angstroms.
-                    //47 - 54        Real(8.3)     z            Orthogonal coordinates for Z in Angstroms.
-                    //55 - 60        Real(6.2)     occupancy    Occupancy.
-                    //61 - 66        Real(6.2)     tempFactor   Temperature  factor.
-                    //77 - 78        LString(2)    element      Element symbol, right-justified.
-                    //79 - 80        LString(2)    charge       Charge  on the atom.
-                    outfile << "ATOM  "
-                        << std::setw(5) << framedata->prefix[i].substr(19, 5) << " "
-                        << " " << std::setw(3) << framedata->prefix[i].substr(12, 3)
-                        << " "
-                        << std::setw(3) << framedata->prefix[i].substr(6, 3)
-                        << " A"
-                        << std::setw(4) << framedata->prefix[i].substr(1, 4)
-                        << "    "
-                        << std::right << std::fixed 
-                        << std::setw(8) << std::setprecision(3) << framedata->coordinates(0,i) * 10
-                        << std::setw(8) << std::setprecision(3) << framedata->coordinates(1,i) * 10
-                        << std::setw(8) << std::setprecision(3) << framedata->coordinates(2,i) * 10
-                        << std::setw(6) << std::setprecision(2) << 1.0
-                        << std::setw(6) << std::setprecision(2) << 1.0 << "\n"                
-                        << std::flush;
-
+                    //20130819                            
+                    //if (!(framedata->coordinates.col(i).array() == 0).all()) {
+                        //quickfix
+                        //    1 ASN   H1         1    1.021435895    2.079909498    0.623854235
+                        //ATOM      1  N   THR A   1      -0.313  18.726  33.523  1.00 21.00           N
+                        // 1 -  6        Record name   "ATOM  "
+                        // 7 - 11        Integer       serial       Atom  serial number.
+                        //13 - 16        Atom          name         Atom name.
+                        //17             Character     altLoc       Alternate location indicator.
+                        //18 - 20        Residue name  resName      Residue name.
+                        //22             Character     chainID      Chain identifier.
+                        //23 - 26        Integer       resSeq       Residue sequence number.
+                        //27             AChar         iCode        Code for insertion of residues.
+                        //31 - 38        Real(8.3)     x            Orthogonal coordinates for X in Angstroms.
+                        //39 - 46        Real(8.3)     y            Orthogonal coordinates for Y in Angstroms.
+                        //47 - 54        Real(8.3)     z            Orthogonal coordinates for Z in Angstroms.
+                        //55 - 60        Real(6.2)     occupancy    Occupancy.
+                        //61 - 66        Real(6.2)     tempFactor   Temperature  factor.
+                        //77 - 78        LString(2)    element      Element symbol, right-justified.
+                        //79 - 80        LString(2)    charge       Charge  on the atom.
+                        outfile << "ATOM  "
+                            << std::setw(5) << framedata->prefix[i].substr(19, 5) << " "
+                            << " " << std::setw(3) << framedata->prefix[i].substr(12, 3)
+                            << " "
+                            << std::setw(3) << framedata->prefix[i].substr(6, 3)
+                            << " A"
+                            << std::setw(4) << framedata->prefix[i].substr(1, 4)
+                            << "    "
+                            << std::right << std::fixed 
+                            << std::setw(8) << std::setprecision(3) << framedata->coordinates(0,i) * 10
+                            << std::setw(8) << std::setprecision(3) << framedata->coordinates(1,i) * 10
+                            << std::setw(8) << std::setprecision(3) << framedata->coordinates(2,i) * 10
+                            << std::setw(6) << std::setprecision(2) << 1.0
+                            << std::setw(6) << std::setprecision(2) << 1.0 << "\n"                
+                            << std::flush;
+                        //20130819   
+                    //}
                 }
             }
             if (me->cog_write)
@@ -320,31 +327,37 @@ void FrameGeometry::WriteOutFrame(Structs::FrameGeometric *framedata, gz::ogzstr
     }
 }
 
+//WARNING: never include any ions or solvent in the rotation
 void FrameGeometry::CorrectionRotational(Structs::FrameGeometric *framedata, Structs::FrameGeometric *ref_framedata, Structs::InputParametersFrameout *me) {
+
     //where to stop applying correction
     int last_atom = 0;
 
-    //if ions are present, apply correction to atoms up to the first ion atom
-    if (me->ion_molecules.cols() > 0)
+    //apply correction to the last of the solutes
+    if ((me->solute_molecules.cols() > 0 && me->solute_cog_molecules.cols() > 0))
     {
-        last_atom = me->ion_molecules(0,me->ion_molecules.cols()-1);
+        last_atom = me->solute_cog_molecules(1,me->solute_cog_molecules.cols()-1);
     }
-    
-    //if ions are not present, apply correction to atoms up to the first solvent
-    else if (me->solvent_molecules.cols() > 0)
+    //apply correction to the essentail solutes
+    else         if ((me->solute_molecules.cols() > 0))
     {
-        last_atom = me->solvent_molecules(0,me->solvent_molecules.cols()-1);
+        last_atom = me->solute_molecules(1,me->solute_molecules.cols()-1);
+    }
+    //if ions are not present, apply correction based on atoms up to the first solvent
+    else
+    {
+        return;
+        last_atom = me->solvent_molecules(0,0) - 1;
     }
 
     for (int i = 0; i < 10; i++)
     {
         Eigen::JacobiSVD<Eigen::Matrix<double, 3, Eigen::Dynamic>> svd (framedata->coordinates.leftCols(last_atom) * ref_framedata->coordinates.leftCols(last_atom).transpose(), Eigen::ComputeFullU | Eigen::ComputeFullV);
         auto R  = svd.matrixV()*svd.matrixU().transpose();
-
-        for (int i = 0; i < framedata->coordinates.cols(); i++)
+        for (int j = 0; j < framedata->coordinates.cols(); j++)
         {
             //framedata->coordinates.col(i) = ref_framedata->solute_cog + (R * (framedata->coordinates.col(i) - framedata->solute_cog));
-            framedata->coordinates.col(i) = (R * framedata->coordinates.col(i));
-        }    
-    }
+            framedata->coordinates.col(j) = (R * framedata->coordinates.col(j));
+        }   
+    } 
 }
