@@ -97,6 +97,10 @@ int main(int argc, char* argv[])
     //build the search grids in advance and only reference to them in the rest of the code
     Structs::FrameoutReferenceGrids grids;
 
+#ifdef DEBUG
+    std::cout << "-->search space per molecule:" << std::endl;  
+#endif // DEBUG
+
     //search grids for solute molecules
     for (int x = 0; x < me.solute_molecules.cols(); x++)
     {        
@@ -126,6 +130,7 @@ int main(int argc, char* argv[])
     }
 
 #ifdef DEBUG
+    std::cout << "first atom of the frame" << std::endl;  
     std::cout << grids.firstAtomBasedBoxShifter[0] << std::endl;
 #endif // DEBUG
 
@@ -497,12 +502,6 @@ int main(int argc, char* argv[])
                                                 {
                                                     Gather::SoluteMolecule(&activeFrames[i_frames], &me, &grids.SolutesGatherer);
                                                     Gather::SoluteCenterOfGeometry(&activeFrames[i_frames], &me, &grids.SoluteCOGGatherer);
-                                                    if (me.correction_translation)
-                                                    {
-                                                        activeFrames[i_frames].coordinates.colwise() -= activeFrames[i_frames].solute_cog;
-                                                        activeFrames[i_frames].solute_cog.setZero();
-                                                        activeFrames[i_frames].solute_cog_sum.setZero();
-                                                    }
                                                     Gather::IonsCenterOfGeometry(&activeFrames[i_frames], &me, &grids.IonsGatherer);
                                                     if (me.solvent_sphere)
                                                     {                                                        
@@ -511,6 +510,12 @@ int main(int argc, char* argv[])
                                                     if (!me.solvent_sphere)
                                                     {                                                        
                                                         Gather::Solvent(&activeFrames[i_frames], &me, &grids.SolventGatherer);
+                                                    }
+                                                    if (me.correction_translation)
+                                                    {
+                                                        activeFrames[i_frames].coordinates.colwise() -= activeFrames[i_frames].solute_cog;
+                                                        activeFrames[i_frames].solute_cog.setZero();
+                                                        activeFrames[i_frames].solute_cog_sum.setZero();
                                                     }
                                                     if (me.correction_rotation)
                                                     {
@@ -632,14 +637,14 @@ int main(int argc, char* argv[])
             if (activeFrame_counter > 0)
             {
                 int perThread = activeFrame_counter / me.num_thread_real; 
-
 #ifdef DEBUG
                 ////print out all time and corresponding timestep of n frames stored
                 //for (int x = 0; x < activeFrame_counter; x++)
                 //{
                 //    std::cout << activeFrames[x].time << " " << activeFrames[x].timestep << std::endl;  
                 //}                  
-                std::cout << "--->process the remaining frames ( " << activeFrame_counter << " of " << activeFrame_count << " )" << std::endl;
+                std::cout << "--->process the remaining frames ( " << activeFrame_counter << " of " << activeFrame_count << " )" << std::endl;                  
+                std::cout << "--->  assigning " << perThread << " frames to each thread" << std::endl;
 #endif // DEBUG
 
                 //the calculation part starts here
@@ -663,12 +668,6 @@ int main(int argc, char* argv[])
                                 {
                                     Gather::SoluteMolecule(&activeFrames[i_frames], &me, &grids.SolutesGatherer);
                                     Gather::SoluteCenterOfGeometry(&activeFrames[i_frames], &me, &grids.SoluteCOGGatherer);
-                                    if (me.correction_translation)
-                                    {
-                                        activeFrames[i_frames].coordinates.colwise() -= activeFrames[i_frames].solute_cog;
-                                        activeFrames[i_frames].solute_cog.setZero();
-                                        activeFrames[i_frames].solute_cog_sum.setZero();
-                                    }
                                     Gather::IonsCenterOfGeometry(&activeFrames[i_frames], &me, &grids.IonsGatherer);
                                     if (me.solvent_sphere)
                                     {
@@ -677,6 +676,12 @@ int main(int argc, char* argv[])
                                     if (!me.solvent_sphere)
                                     {
                                         Gather::Solvent(&activeFrames[i_frames], &me, &grids.SolventGatherer);
+                                    }
+                                    if (me.correction_translation)
+                                    {
+                                        activeFrames[i_frames].coordinates.colwise() -= activeFrames[i_frames].solute_cog;
+                                        activeFrames[i_frames].solute_cog.setZero();
+                                        activeFrames[i_frames].solute_cog_sum.setZero();
                                     }
                                     if (me.correction_rotation)
                                     {
@@ -707,20 +712,18 @@ int main(int argc, char* argv[])
                     //remove threads
                     delete[] myThreads;
 
+#ifdef DEBUG
+                    std::cout << "--->spawn last threads to finish the job" << std::endl;
+#endif // DEBUG
                     //spawn one thread per remaining frame
                     std::vector<std::thread> myThreadsRemainders;
-                    for (int i_remainders = (perThread * me.num_thread_real) - 1; i_remainders < activeFrame_counter; i_remainders++)
+                    for (int i_remainders = (perThread * me.num_thread_real); i_remainders < activeFrame_counter; i_remainders++)
                     {
                         myThreadsRemainders.push_back((std::thread([&activeFrames, &rotationalFitFrame, &me, i_remainders, &grids]()
                         {
                             Gather::SoluteMolecule(&activeFrames[i_remainders], &me, &grids.SolutesGatherer);
+                            //20130824: some bug here
                             Gather::SoluteCenterOfGeometry(&activeFrames[i_remainders], &me, &grids.SoluteCOGGatherer);
-                            if (me.correction_translation)
-                            {
-                                activeFrames[i_remainders].coordinates.colwise() -= activeFrames[i_remainders].solute_cog;
-                                activeFrames[i_remainders].solute_cog.setZero();
-                                activeFrames[i_remainders].solute_cog_sum.setZero();
-                            }
                             Gather::IonsCenterOfGeometry(&activeFrames[i_remainders], &me, &grids.IonsGatherer);
                             if (me.solvent_sphere)
                             {
@@ -730,6 +733,12 @@ int main(int argc, char* argv[])
                             {
                                 Gather::Solvent(&activeFrames[i_remainders], &me, &grids.SolventGatherer);
                             }
+                            if (me.correction_translation)
+                            {
+                                activeFrames[i_remainders].coordinates.colwise() -= activeFrames[i_remainders].solute_cog;
+                                activeFrames[i_remainders].solute_cog.setZero();
+                                activeFrames[i_remainders].solute_cog_sum.setZero();
+                            }
                             if (me.correction_rotation)
                             {
                                 FrameGeometry::CorrectionRotational(&activeFrames[i_remainders], &rotationalFitFrame, &me);
@@ -737,6 +746,9 @@ int main(int argc, char* argv[])
                         })));	
                     }
 
+#ifdef DEBUG
+                    std::cout << "--->wait for last "<< myThreadsRemainders.size() <<" threads to finish the job" << std::endl;
+#endif // DEBUG
                     //wait for all threads to finish
                     for(int i_remainder = 0; i_remainder < myThreadsRemainders.size(); i_remainder++)
                     {

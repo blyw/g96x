@@ -79,8 +79,7 @@ void InputParameters::ParseInputFile(Structs::InputParametersFrameout *this_para
     for (int i = 0; i < xpathObj->nodesetval->nodeNr; i++)
     {
         //read current node;
-        std::cout << xpathObj->nodesetval->nodeTab[i]->name << std::endl;
-        std::cout << xmlGetProp(xpathObj->nodesetval->nodeTab[i], BAD_CAST ((std::string)"id").c_str())  << std::endl;
+        std::cout << xpathObj->nodesetval->nodeTab[i]->name << " id " << xmlGetProp(xpathObj->nodesetval->nodeTab[i], BAD_CAST ((std::string)"id").c_str())  << std::endl;
 
         //read the topology section
         xpathCtx->node = xpathObj->nodesetval->nodeTab[i];
@@ -147,7 +146,7 @@ void InputParameters::ParseInputFile(Structs::InputParametersFrameout *this_para
         //std::cout << Ions->nodesetval->nodeNr << std::endl;
         for (int j = 0; j < Ions->nodesetval->nodeNr; j++)
         {
-            std::cout << j << std::endl;
+            //std::cout << j << std::endl;
             xpathCtx->node = Ions->nodesetval->nodeTab[j];
             //get first atom of COG solute
             this_params->ion_molecules(0,j) = atoi(XPathGetText("./@first_atom", xpathCtx));
