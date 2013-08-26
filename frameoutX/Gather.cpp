@@ -196,7 +196,7 @@ void Gather::SoluteMolecule(Structs::FrameGeometric *framedata, Structs::InputPa
         }
 
 
-
+        //correct for drifting molecule
         if (i_molecule_num > 0)
         { 
             shortestDistance = 1e20;
@@ -245,9 +245,6 @@ void Gather::SoluteMolecule(Structs::FrameGeometric *framedata, Structs::InputPa
     //if solute molecules are defined than calculate the COG for the frame and update the variable
     if (me->solute_count > 0)
     {
-        //use this center of geometry for the entire frame
-        //FIXXXXXXXXXXXXX
-        //framedata->solute_cog_sum = coordinates_sum;
         framedata->solute_cog(0) = framedata->solute_cog_sum(0)/(framedata->solute_cog_count);
         framedata->solute_cog(1) = framedata->solute_cog_sum(1)/(framedata->solute_cog_count);
         framedata->solute_cog(2) = framedata->solute_cog_sum(2)/(framedata->solute_cog_count);
@@ -354,13 +351,9 @@ void Gather::SoluteCenterOfGeometry(Structs::FrameGeometric *framedata, Structs:
     //if solute molecules are defined than calculate the COG for the frame and update the variable
     if (me->solute_cog_molecules.cols() > 0)
     {
-        //use this center of geometry for the entire frame
-        //FIXXXXXXXXXXXXX
-        //framedata->solute_cog_sum = coordinates_sum;
-        //framedata->solute_cog(0) = framedata->solute_cog_sum(0)/(framedata->solute_cog_count);
-        //framedata->solute_cog(1) = framedata->solute_cog_sum(1)/(framedata->solute_cog_count);
-        //framedata->solute_cog(2) = framedata->solute_cog_sum(2)/(framedata->solute_cog_count);
-        framedata->solute_cog = framedata->solute_cog_sum.array()/(framedata->solute_cog_count);
+        framedata->solute_cog(0) = framedata->solute_cog_sum(0)/(framedata->solute_cog_count);
+        framedata->solute_cog(1) = framedata->solute_cog_sum(1)/(framedata->solute_cog_count);
+        framedata->solute_cog(2) = framedata->solute_cog_sum(2)/(framedata->solute_cog_count);
     }
 }
 
@@ -395,6 +388,7 @@ void Gather::IonsCenterOfGeometry(Structs::FrameGeometric *framedata, Structs::I
         molecule_start = me->ion_molecules(0,i_molecule_num);
         molecule_end = me->ion_molecules(1,i_molecule_num);
         molecule_size = me->ion_molecules(2,i_molecule_num);
+        framedata->solute_cog_count += (molecule_end - molecule_start) + 1;
         //std::cout << molecule_start << " " << molecule_end << " " << molecule_size << std::endl;
 
         //the first atom in a molecule with respect to the center of geometry of solutes
@@ -458,7 +452,9 @@ void Gather::IonsCenterOfGeometry(Structs::FrameGeometric *framedata, Structs::I
     //if solute molecules are defined than calculate the COG for the frame and update the variable
     if (me->ion_molecules.cols() > 0)
     {
-        framedata->solute_cog = framedata->solute_cog_sum.array()/(framedata->solute_cog_count);
+        framedata->solute_cog(0) = framedata->solute_cog_sum(0)/(framedata->solute_cog_count);
+        framedata->solute_cog(1) = framedata->solute_cog_sum(1)/(framedata->solute_cog_count);
+        framedata->solute_cog(2) = framedata->solute_cog_sum(2)/(framedata->solute_cog_count);
     }
 }
 
@@ -497,7 +493,6 @@ void Gather::Solvent(Structs::FrameGeometric *framedata, Structs::InputParameter
         molecule_start = me->solvent_molecules(0,i_molecule_num);
         molecule_end = me->solvent_molecules(1,i_molecule_num);
         molecule_size = me->solvent_molecules(2,i_molecule_num);
-        framedata->solute_cog_count += (molecule_end - molecule_start) + 1;
         //std::cout << molecule_start << " " << molecule_end << " " << molecule_size << std::endl;
 
         //the first atom in a molecule with respect to the center of geometry of solutes
@@ -571,7 +566,7 @@ void Gather::Solvent(Structs::FrameGeometric *framedata, Structs::InputParameter
     {
         last_atom = me->solute_cog_molecules(1,me->solute_cog_molecules.cols()-1);
     }
-    //apply correction to the essentail solutes
+    //apply correction to the essential solutes
     else if ((me->solute_molecules.cols() > 0))
     {
         last_atom = me->solute_molecules(1,me->solute_molecules.cols()-1);
