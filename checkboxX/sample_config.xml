@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<me>
+  <job id="1">
+    <topology>
+      <atom_records_count>103690</atom_records_count>
+      <solvent first_atom="6602" last_atom="103690" skip="false">
+        <number_of_atoms>3</number_of_atoms>
+        <dimension_search>2</dimension_search>
+      </solvent>
+      <solutes_cog>
+        <solute first_atom="5263" last_atom="5287" skip="false" init_atom="5263">
+          <number_of_atoms>25</number_of_atoms>
+          <dimension_search>1</dimension_search>
+        </solute>
+        <solute first_atom="5288" last_atom="5312" skip="false" init_atom="5288">
+          <number_of_atoms>25</number_of_atoms>
+          <dimension_search>1</dimension_search>
+        </solute>
+        <solute first_atom="5313" last_atom="5325" skip="false" init_atom="5313">
+          <number_of_atoms>13</number_of_atoms>
+          <dimension_search>1</dimension_search>
+        </solute>
+        <solute first_atom="5326" last_atom="5338" skip="false" init_atom="5326">
+          <number_of_atoms>13</number_of_atoms>
+          <dimension_search>1</dimension_search>
+        </solute>
+      </solutes_cog>
+      <ions>
+        <ion first_atom="6578" last_atom="6601" skip="false" init_atom="6578">
+          <number_of_atoms>1</number_of_atoms>
+          <dimension_search>1</dimension_search>
+        </ion>
+        <ion first_atom="5339" last_atom="6577" skip="false" init_atom="5339">
+          <number_of_atoms>3</number_of_atoms>
+          <dimension_search>1</dimension_search>
+        </ion>
+      </ions>
+      <solutes>
+        <solute first_atom="1" last_atom="2631" skip="false" init_atom="1">
+          <dimension_search>1</dimension_search>
+        </solute>
+        <solute first_atom="2632" last_atom="5262" skip="false" init_atom="3699">
+          <dimension_search>1</dimension_search>
+        </solute>
+      </solutes>
+    </topology>
+    <analysis>
+      <frameout gather="true" >
+        <distance_cut_off>0.2</distance_cut_off>
+        <cog_write>false</cog_write>
+        <correction_translation>false</correction_translation>
+        <correction_rotation>false</correction_rotation>
+        <solvent_sphere cut_off="0.5">false</solvent_sphere>
+      </frameout>
+      <checkbox>
+        <distance_cut_off>3.0</distance_cut_off>
+        <output_verbosity_level>3</output_verbosity_level>
+      </checkbox>
+    </analysis>
+    <variables>
+      <buffers>3</buffers>
+      <frames_per_thread>4</frames_per_thread>
+      <number_of_threads>7</number_of_threads>
+      <number_of_threads_multiplier>1</number_of_threads_multiplier>
+      <reference_file>test.cnf</reference_file>
+    </variables>
+    <input>
+      <format>cnf</format>
+      <files>
+        <file>traxl-57ac2-b.nosolvent.cnf.gz</file>
+      </files>
+    </input>
+    <output>
+      <filename_prefix>checkbox</filename_prefix>
+      <format>pdb</format>
+      <frames_per_file>0</frames_per_file>
+      <frame_interval>0</frame_interval>
+      <time_interval>0</time_interval>
+    </output>
+  </job>
+</me>

@@ -43,7 +43,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>..\cpp_libs\zlib-1.2.5\dll32;..\cpp_libs\libxml\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\cpp_libs\zlib-1.2.5\dll32;..\cpp_libs\eigen;..\cpp_libs\libxml\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -64,11 +64,25 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="checkbox.cpp" />
+    <ClCompile Include="checkboxX.cpp" />
+    <ClCompile Include="FrameGeometry.cpp" />
     <ClCompile Include="gzsstream.cpp" />
+    <ClCompile Include="InputParameters.cpp" />
+    <ClCompile Include="PeriodicityCheck.cpp" />
+    <ClCompile Include="SearchGrid.cpp" />
+    <ClCompile Include="Trajectories.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="FrameGeometry.h" />
     <ClInclude Include="gzstream.h" />
+    <ClInclude Include="InputParameters.h" />
+    <ClInclude Include="PeriodicityCheck.h" />
+    <ClInclude Include="SearchGrid.h" />
+    <ClInclude Include="Structs.h" />
+    <ClInclude Include="Trajectories.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Xml Include="sample_config.xml" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
