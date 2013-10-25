@@ -1,3 +1,4 @@
+#define DEBUG
 #define EIGEN_NO_DEBUG  
 #define EIGEN_MPL2_ONLY
 #define EIGEN_INITIALIZE_MATRICES_BY_ZERO
@@ -226,6 +227,8 @@ void FrameGeometry::WriteOutFrame(Structs::FrameGeometric *framedata, gz::ogzstr
             outfile << std::fixed << std::setprecision(9);
             for (int i = 0; i < me->atomrecords; i++)
             {
+                //add a skip DUMMY atoms here
+
                 //quickfix
                 if (me->solvent_skip)
                 {
@@ -315,8 +318,8 @@ void FrameGeometry::WriteOutFrame(Structs::FrameGeometric *framedata, gz::ogzstr
             }
             if (me->cog_write)
             {
-                outfile << "HETATM" << std::setw(5) << me->atomrecords+2 << "  ZN   ZN A9999    "
-                    << std::fixed
+                outfile << std::fixed
+                    << "HETATM" << std::setw(5) << me->atomrecords+2 << "  ZN   ZN A9999    "
                     << std::setw(8) << std::setprecision(3) << framedata->solute_cog.x() * 10
                     << std::setw(8) << std::setprecision(3) << framedata->solute_cog.y() * 10
                     << std::setw(8) << std::setprecision(3) << framedata->solute_cog.z() * 10

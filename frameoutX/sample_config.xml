@@ -51,7 +51,14 @@
         <correction_translation>true</correction_translation>
         <correction_rotation>true</correction_rotation>
         <solvent_sphere cut_off="0.5">true</solvent_sphere>
+        <write_skip>
+          <atom></atom>
+        </write_skip>
       </frameout>
+      <checkbox>
+        <distance_cut_off>2.0</distance_cut_off>
+        <output_verbosity_level>1</output_verbosity_level>
+      </checkbox>
     </analysis>
     <variables>
       <frames_per_thread>4</frames_per_thread>

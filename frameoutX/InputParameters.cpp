@@ -1,4 +1,4 @@
-//#define DEBUG
+#define DEBUG
 #define EIGEN_NO_DEBUG  
 #define EIGEN_MPL2_ONLY
 #define EIGEN_INITIALIZE_MATRICES_BY_ZERO
@@ -96,7 +96,8 @@ void InputParameters::ParseInputFile(Structs::InputParametersFrameout *this_para
         //get last atom
         this_params->solvent_molecules(1,0) = atoi(XPathGetText("./topology/solvent/@last_atom", xpathCtx));
         //skip or keep solvent
-        this_params->solvent_skip = atoi(XPathGetText("./topology/solvent/@skip", xpathCtx));
+        //this_params->solvent_skip = atoi(XPathGetText("./topology/solvent/@skip", xpathCtx));
+        this_params->solvent_skip = std::strcmp(XPathGetText("./topology/solvent/@skip", xpathCtx), "true") == 0;
         //get number of atoms
         this_params->solvent_molecules(2,0) = atoi(XPathGetText("./topology/solvent/number_of_atoms", xpathCtx));
         //get images factor

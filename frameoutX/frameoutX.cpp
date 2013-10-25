@@ -1,4 +1,4 @@
-//#define DEBUG
+#define DEBUG
 #define EIGEN_NO_DEBUG  
 #define EIGEN_MPL2_ONLY
 #define EIGEN_INITIALIZE_MATRICES_BY_ZERO
@@ -174,6 +174,7 @@ int main(int argc, char* argv[])
 
     //holds the active frames which is equal to the number of frames handle per thread
     int activeFrame_count = me.num_thread_real * me.num_frame_per_thread;
+
     std::vector<Structs::FrameGeometric> activeFrames (activeFrame_count);
     std::vector<Structs::FrameGeometric> activeFramesCopy (activeFrame_count);
 

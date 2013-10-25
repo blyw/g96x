@@ -1,4 +1,4 @@
-//#define DEBUG
+#define DEBUG
 #define EIGEN_NO_DEBUG  
 #define EIGEN_MPL2_ONLY
 #define EIGEN_INITIALIZE_MATRICES_BY_ZERO

@@ -16,5 +16,6 @@ public:
     static void BuildRectangularExtended(std::vector<Eigen::Matrix<int, 3, Eigen::Dynamic>> *grids, int number_of_neighbour_per_dimension, int extended_by_n);
     static void BuildTruncatedOctahedral(std::vector<Eigen::Matrix<int, 3, Eigen::Dynamic>> *grids, int number_of_neighbour_per_dimension);
     static void BuildTruncatedOctahedral(std::vector<Eigen::Matrix<int, 3, Eigen::Dynamic>> *grids, int number_of_neighbour_per_dimension, int extended_by_n);
+    static void BuildRectangularForCheckbox(Eigen::Matrix<int, 3, 26> *grid);
 };
 
