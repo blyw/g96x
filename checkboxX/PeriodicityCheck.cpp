@@ -25,9 +25,6 @@ void PeriodicityCheck::NearestImagesFinder(Structs::FrameGeometric *framedata, S
     //init variables
     double currentDistance = 0;
 
-    //use a for finding minimum distances in matrix/vector
-    Eigen::MatrixXd::Index minIndex;
-
     //cut-off is derived from (longest bond)^2
     double cut_off = me->distance_cut_off*me->distance_cut_off;
 
@@ -42,19 +39,19 @@ void PeriodicityCheck::NearestImagesFinder(Structs::FrameGeometric *framedata, S
     {
         for (int xx = 0; xx < me->solute_cog_molecules.cols(); xx++)
         {
-            if (me->solute_cog_molecules(1,xx) < mol_end);
+            if (me->solute_cog_molecules(1,xx) < mol_end)
             {
                 mol_end = me->solute_cog_molecules(1,xx);
             }
         }
     }
-    else if (me->solvent_molecules.cols() > 0)
+    else if (me->solute_molecules.cols() > 0)
     {
-        for (int xx = 0; xx < me->solvent_molecules.cols(); xx++)
+        for (int xx = 0; xx < me->solute_molecules.cols(); xx++)
         {
-            if (me->solvent_molecules(1,xx) < mol_end);
+            if (me->solute_molecules(1,xx) < mol_end)
             {
-                mol_end = me->solvent_molecules(1,xx);
+                mol_end = me->solute_molecules(1,xx);
             }
         }
     }
@@ -64,7 +61,7 @@ void PeriodicityCheck::NearestImagesFinder(Structs::FrameGeometric *framedata, S
     }
 
     //after determining the end of the solute molecules, check for interaction with neighbouring copies
-    //std::cout << mol_start << " " << mol_end << std::endl;
+    std::cout << "////" <<  mol_start << " " << mol_end << std::endl;
 
     for (int i_atom_check = mol_start - 1; i_atom_check < mol_end; i_atom_check++)
     {
@@ -75,7 +72,7 @@ void PeriodicityCheck::NearestImagesFinder(Structs::FrameGeometric *framedata, S
                 ).cast<double>().array().colwise() * framedata->box_length.array()
                 ).matrix().colwise() + framedata->coordinates.col(i_atom_neighbour)
                 ).colwise() - framedata->coordinates.col(i_atom_check)
-                ).cwiseAbs2().colwise().sum().minCoeff(&minIndex)
+                ).cwiseAbs2().colwise().sum().minCoeff()
                 );
             ////std::cout << "####" << i_atom_check << " " << i_atom_neighbour << std::endl;
             ////the box with the nearest image interaction is grids->Checkbox.col(minIndex)
@@ -242,12 +239,15 @@ void PeriodicityCheck::WriteResults(Structs::FrameGeometric *framedata, Structs:
         break;
     default:
         std::stable_sort(framedata->periodic_interactions.begin(), framedata->periodic_interactions.end(), sortFunction4);
+        if (framedata->periodic_interactions.size() > 0)
+        {
+            outfile << std::setw(9) << std::right << std::setprecision(0) << framedata->periodic_interactions[0][0] << " " 
+                << std::setw(12) << std::right << std::setprecision(0) << framedata->periodic_interactions[0][1] << " " 
+                << std::setw(6) << std::right << std::setprecision(0) << framedata->prefix[framedata->periodic_interactions[0][2]] << " " 
+                << std::setw(6) << std::right << std::setprecision(0) << framedata->prefix[framedata->periodic_interactions[0][3]] << " " 
+                << std::setw(9) << std::right << std::setprecision(4) << framedata->periodic_interactions[0][4] << std::endl;
 
-        outfile << std::setw(9) << std::right << std::setprecision(0) << framedata->periodic_interactions[0][0] << " " 
-            << std::setw(12) << std::right << std::setprecision(0) << framedata->periodic_interactions[0][1] << " " 
-            << std::setw(6) << std::right << std::setprecision(0) << framedata->prefix[framedata->periodic_interactions[0][2]] << " " 
-            << std::setw(6) << std::right << std::setprecision(0) << framedata->prefix[framedata->periodic_interactions[0][3]] << " " 
-            << std::setw(9) << std::right << std::setprecision(4) << framedata->periodic_interactions[0][4] << std::endl;
+        }
         break;
     }
 }

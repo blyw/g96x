@@ -156,3 +156,4 @@ public:
         Eigen::Matrix<double, 3, Eigen::Dynamic> forces;
     };
 };
+

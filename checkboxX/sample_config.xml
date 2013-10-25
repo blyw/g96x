@@ -9,19 +9,19 @@
       </solvent>
       <solutes_cog>
         <solute first_atom="5263" last_atom="5287" skip="false" init_atom="5263">
-          <number_of_atoms>25</number_of_atoms>
+          <number_of_atoms>1</number_of_atoms>
           <dimension_search>1</dimension_search>
         </solute>
         <solute first_atom="5288" last_atom="5312" skip="false" init_atom="5288">
-          <number_of_atoms>25</number_of_atoms>
+          <number_of_atoms>1</number_of_atoms>
           <dimension_search>1</dimension_search>
         </solute>
         <solute first_atom="5313" last_atom="5325" skip="false" init_atom="5313">
-          <number_of_atoms>13</number_of_atoms>
+          <number_of_atoms>1</number_of_atoms>
           <dimension_search>1</dimension_search>
         </solute>
         <solute first_atom="5326" last_atom="5338" skip="false" init_atom="5326">
-          <number_of_atoms>13</number_of_atoms>
+          <number_of_atoms>1</number_of_atoms>
           <dimension_search>1</dimension_search>
         </solute>
       </solutes_cog>
@@ -45,33 +45,25 @@
       </solutes>
     </topology>
     <analysis>
-      <frameout gather="true" >
-        <distance_cut_off>0.2</distance_cut_off>
-        <cog_write>false</cog_write>
-        <correction_translation>false</correction_translation>
-        <correction_rotation>false</correction_rotation>
-        <solvent_sphere cut_off="0.5">false</solvent_sphere>
-      </frameout>
       <checkbox>
-        <distance_cut_off>3.0</distance_cut_off>
-        <output_verbosity_level>3</output_verbosity_level>
+        <distance_cut_off>2.0</distance_cut_off>
+        <output_verbosity_level>1</output_verbosity_level>
       </checkbox>
     </analysis>
     <variables>
-      <buffers>3</buffers>
       <frames_per_thread>4</frames_per_thread>
-      <number_of_threads>7</number_of_threads>
+      <number_of_threads>8</number_of_threads>
       <number_of_threads_multiplier>1</number_of_threads_multiplier>
-      <reference_file>test.cnf</reference_file>
+      <reference_file>ref2.cnf</reference_file>
     </variables>
     <input>
-      <format>cnf</format>
+      <format>trc</format>
       <files>
-        <file>traxl-57ac2-b.nosolvent.cnf.gz</file>
+        <file>md-bpam344-bpfh-10mm_1_mpi.trc.gz</file>
       </files>
     </input>
     <output>
-      <filename_prefix>checkbox</filename_prefix>
+      <filename_prefix>test</filename_prefix>
       <format>pdb</format>
       <frames_per_file>0</frames_per_file>
       <frame_interval>0</frame_interval>

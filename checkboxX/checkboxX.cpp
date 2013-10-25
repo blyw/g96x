@@ -109,7 +109,7 @@ int main(int argc, char* argv[])
     //this is only used for gathering the first atom of each frame
     Eigen::Vector3d init_shift(0,0,0);
 
-    int trajs_buffer_size = 3;
+    int trajs_buffer_size = 6;
     std::vector<Trajectories> trajs (trajs_buffer_size);
 
 #ifdef DEBUG
@@ -346,6 +346,71 @@ int main(int argc, char* argv[])
         }
 
         done_reading = true;
+        //std::cout << "done reading: " << done_reading << std::endl;
+
+        //old code, just in case it is needed
+        //        for (unsigned int i_input_files = 0; i_input_files < me.input_files.size(); i_input_files++)
+        //        {
+        //
+        //#ifdef DEBUG
+        //            std::cout << "      processsing input file: " << me.input_files[i_input_files] << std::endl;
+        //#endif // DEBUG
+        //
+        //            //define file to read
+        //            gz::igzstream file(me.input_files[i_input_files].c_str());
+        //
+        //#ifdef DEBUG
+        //            std::cout << "      input file found" << std::endl;
+        //#endif // DEBUG
+        //
+        //            //check if it is possible to read file
+        //            if (!file)
+        //            {
+        //                std::cerr << "          cannot open data file" << "\n";
+        //            }
+        //            else 
+        //            {
+        //
+        //#ifdef DEBUG
+        //                std::cout << "      filling object" << std::endl;
+        //#endif // DEBUG
+        //
+        //                for (int i = 0; i < trajs_buffer_size; i++)
+        //                {
+        //#ifdef DEBUG
+        //                    std::cout << "      reading data file" << std::endl;
+        //#endif // DEBUG
+        //
+        //                    while (!(trajs[i].state=="new" || trajs[i].state=="written"))
+        //                    {    
+        //                        std::this_thread::sleep_for(dura);
+        //                    }
+        //
+        //                    trajs[i].ReadGeometric(file, outfile);      
+        //
+        //#ifdef DEBUG
+        //                    std::cout << "#### reader got " << trajs[i].activeFrame_counter << " frames" << std::endl;  
+        //#endif // DEBUG
+        //
+        //
+        //                    if (file.eof())
+        //                    {
+        //                        break;
+        //                    }
+        //
+        //                    if (i == trajs_buffer_size -1)
+        //                    {
+        //                        i = -1;
+        //                    }
+        //                }
+        //            }
+        //            file.close();
+        //
+        //#ifdef DEBUG
+        //            std::cout << "--->done with current input file, moving to next input file" << std::endl;  
+        //#endif // DEBUG
+        //
+        //        }
     });
 
 #ifdef DEBUG

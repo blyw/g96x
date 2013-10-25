@@ -66,7 +66,7 @@
   <ItemGroup>
     <ClCompile Include="checkboxX.cpp" />
     <ClCompile Include="FrameGeometry.cpp" />
-    <ClCompile Include="gzsstream.cpp" />
+    <ClCompile Include="gzstream.cpp" />
     <ClCompile Include="InputParameters.cpp" />
     <ClCompile Include="PeriodicityCheck.cpp" />
     <ClCompile Include="SearchGrid.cpp" />

@@ -1,12 +1,11 @@
 Import('env')
 
-env.Object(target='ErrorMessages', source=['ErrorMessages.cpp'])
 env.Object(target='gzstream', source=['gzstream.cpp'])
 env.Object(target='SearchGrid', source=['SearchGrid.cpp'])
 env.Object(target='FrameGeometry', source=['FrameGeometry.cpp'])
 env.Object(target='Gather', source=['Gather.cpp'])
 env.Object(target='InputParameters', source=['InputParameters.cpp'])
 env.Object(target='Trajectories', source=['Trajectories.cpp'])
-env.Object(target='frameout11', source=['frameout11.cpp'])
+env.Object(target='frameoutX', source=['frameoutX.cpp'])
 
-env.Program(target='frameout-scons',source=['ErrorMessages', 'gzstream', 'SearchGrid', 'FrameGeometry', 'Gather', 'InputParameters', 'Trajectories', 'frameout11'])
+env.Program(target='frameout-scons',source=['gzstream', 'SearchGrid', 'FrameGeometry', 'Gather', 'InputParameters', 'Trajectories', 'frameoutX'])
