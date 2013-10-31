@@ -98,7 +98,7 @@ void Gather::SoluteMolecule(Structs::FrameGeometric *framedata, Structs::InputPa
     //the cut-off is used to limit the search space
     double cut_off = me->distance_cut_off*me->distance_cut_off;
     //initialize some variables used for defining molecules in gathering process
-    int molecule_start = 0, molecule_end = 0, molecule_start_previous = 0, initial_atom = 0;
+    int molecule_start = 0, molecule_end = 0, molecule_start_previous = 0, reference_atom = 0;
 
     //initiallize variables used for loops
     int i_molecule_num = 0, i_atom = 0, j_atom = 0;
@@ -109,7 +109,7 @@ void Gather::SoluteMolecule(Structs::FrameGeometric *framedata, Structs::InputPa
         //define first atom, last atom and number of periodic copies of a solute molecule
         molecule_start = me->solute_molecules(0,i_molecule_num);
         molecule_end = me->solute_molecules(1,i_molecule_num);
-        initial_atom = me->solute_molecules(3,i_molecule_num);
+        reference_atom = me->solute_molecules(3,i_molecule_num);
         framedata->solute_cog_count += (molecule_end - molecule_start) + 1;
 
         //the first atom in a solute molecule which is not the first solute molecule is 
@@ -212,7 +212,7 @@ void Gather::SoluteMolecule(Structs::FrameGeometric *framedata, Structs::InputPa
                 currentDistance = (((((
                     (*grid)[i_molecule_num]
                 ).cast<double>().array().colwise() * framedata->box_length.array()
-                    ).matrix().colwise() + framedata->coordinates.col(initial_atom - 1)
+                    ).matrix().colwise() + framedata->coordinates.col(reference_atom - 1)
                     ).colwise() - framedata->coordinates.col(j_atom)
                     ).cwiseAbs2().colwise().sum().minCoeff(&minIndex)
                     );
@@ -231,8 +231,12 @@ void Gather::SoluteMolecule(Structs::FrameGeometric *framedata, Structs::InputPa
             //shift the coordinates of the atom in the original frame
             if (!(min_shift.array() == 0).all())
             {
-                framedata->coordinates.block(3, molecule_end - molecule_start + 1, 0, molecule_start -1) += framedata->box_length.cwiseProduct(min_shift.cast<double>());
-                framedata->solute_cog_sum -= (framedata->box_length.cwiseProduct(min_shift.cast<double>()).array() * (molecule_end - molecule_start + 1)).matrix();
+                //FIX HERE
+                std::cout << "####shift correction: " << min_shift << std::endl; 
+                //framedata->coordinates.col(molecule_start - 1) += framedata->box_length.cwiseProduct(min_shift.cast<double>());
+                framedata->coordinates.block(0, molecule_start - 1, 3, molecule_end - molecule_start + 1).colwise() += framedata->box_length.cwiseProduct(min_shift.cast<double>());
+                //framedata->coordinates.block(3, molecule_end - molecule_start + 1, 0, molecule_start -1) += framedata->box_length.cwiseProduct(min_shift.cast<double>());
+                framedata->solute_cog_sum += (framedata->box_length.cwiseProduct(min_shift.cast<double>()).array() * (molecule_end - molecule_start)).matrix();
             }
         }
 

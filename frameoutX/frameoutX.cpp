@@ -428,6 +428,7 @@ int main(int argc, char* argv[])
                             int reference_solute_atom = 0;
                             if (me.solute_count >  0)
                             {
+                                //THIS IS WRONG
                                 reference_solute_atom = me.solute_molecules(3,0) - 1;
                                 //reference_solute_atom = me.solute_molecules(0,0) - 1 + me.shift_reference_atom;
                             }
