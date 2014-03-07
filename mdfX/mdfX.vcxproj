@@ -1,0 +1,107 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{CE322097-75DC-483C-8203-7279B2642770}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>mdfX</RootNamespace>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v120</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v120</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>..\cpp_libs\zlib-1.2.5\dll32;..\cpp_libs\eigen;..\cpp_libs\libxml\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>..\cpp_libs\libxml\lib\iconv.lib;..\cpp_libs\libxml\lib\iconv_a.lib;..\cpp_libs\libxml\lib\libeay32.lib;..\cpp_libs\libxml\lib\libeay32_a.lib;..\cpp_libs\libxml\lib\libexslt.lib;..\cpp_libs\libxml\lib\libexslt_a.lib;..\cpp_libs\libxml\lib\libxml2.lib;..\cpp_libs\libxml\lib\libxml2_a.lib;..\cpp_libs\libxml\lib\libxml2_a_dll.lib;..\cpp_libs\libxml\lib\libxmlsec-mscrypto.lib;..\cpp_libs\libxml\lib\libxmlsec-mscrypto_a.lib;..\cpp_libs\libxml\lib\libxmlsec-openssl.lib;..\cpp_libs\libxml\lib\libxmlsec-openssl_a.lib;..\cpp_libs\libxml\lib\libxmlsec.lib;..\cpp_libs\libxml\lib\libxmlsec_a.lib;..\cpp_libs\libxml\lib\libxslt.lib;..\cpp_libs\libxml\lib\libxslt_a.lib;..\cpp_libs\libxml\lib\ssleay32.lib;..\cpp_libs\libxml\lib\ssleay32_a.lib;..\cpp_libs\zlib-1.2.5\dll32\zlibwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <Text Include="ReadMe.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="DistanceMatrix.cpp" />
+    <ClCompile Include="FrameGeometry.cpp" />
+    <ClCompile Include="gzstream.cpp" />
+    <ClCompile Include="InputParameters.cpp" />
+    <ClCompile Include="mdfX.cpp" />
+    <ClCompile Include="SearchGrid.cpp" />
+    <ClCompile Include="Trajectories.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Xml Include="sample_config.xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="DistanceMatrix.h" />
+    <ClInclude Include="FrameGeometry.h" />
+    <ClInclude Include="gzstream.h" />
+    <ClInclude Include="InputParameters.h" />
+    <ClInclude Include="SearchGrid.h" />
+    <ClInclude Include="Structs.h" />
+    <ClInclude Include="Trajectories.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

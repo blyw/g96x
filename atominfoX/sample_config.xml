@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<me>
+  <job id="1">
+    <analysis>
+      <topology_file></topology_file>
+      <distance_matrix>
+        <atoms_set setA_start="" setA_end="" setB_start="" setB_end="" cut_off="1.4" write_matrix="true" />
+      </distance_matrix>
+    </analysis>
+  </job>
+</me>

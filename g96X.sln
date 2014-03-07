@@ -1,6 +1,8 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2012
+# Visual Studio 2013
+VisualStudioVersion = 12.0.21005.1
+MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "checkboxX", "checkboxX\checkboxX.vcxproj", "{FC3999BF-3989-4699-9D39-28921B21F5C5}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "dbsspX", "dbsspX\dbsspX.vcxproj", "{B05EE85A-AB25-4243-82FF-177878CBAD91}"
@@ -17,6 +19,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "topologyParserX", "topologyParserX\topologyParserX.vcxproj", "{9456D9F0-004A-4DC1-B593-B6B8D6F08CA4}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mdfX", "mdfX\mdfX.vcxproj", "{CE322097-75DC-483C-8203-7279B2642770}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "atominfoX", "atominfoX\atominfoX.vcxproj", "{CCD6A0D9-72FC-4D76-B011-2DFE06546AEC}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -48,6 +54,14 @@ Global
 		{9456D9F0-004A-4DC1-B593-B6B8D6F08CA4}.Debug|Win32.Build.0 = Debug|Win32
 		{9456D9F0-004A-4DC1-B593-B6B8D6F08CA4}.Release|Win32.ActiveCfg = Release|Win32
 		{9456D9F0-004A-4DC1-B593-B6B8D6F08CA4}.Release|Win32.Build.0 = Release|Win32
+		{CE322097-75DC-483C-8203-7279B2642770}.Debug|Win32.ActiveCfg = Debug|Win32
+		{CE322097-75DC-483C-8203-7279B2642770}.Debug|Win32.Build.0 = Debug|Win32
+		{CE322097-75DC-483C-8203-7279B2642770}.Release|Win32.ActiveCfg = Release|Win32
+		{CE322097-75DC-483C-8203-7279B2642770}.Release|Win32.Build.0 = Release|Win32
+		{CCD6A0D9-72FC-4D76-B011-2DFE06546AEC}.Debug|Win32.ActiveCfg = Debug|Win32
+		{CCD6A0D9-72FC-4D76-B011-2DFE06546AEC}.Debug|Win32.Build.0 = Debug|Win32
+		{CCD6A0D9-72FC-4D76-B011-2DFE06546AEC}.Release|Win32.ActiveCfg = Release|Win32
+		{CCD6A0D9-72FC-4D76-B011-2DFE06546AEC}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
