@@ -1,11 +1,12 @@
 Import('env')
+Import('build_dir')
 
 env.Object(target='gzstream', source=['gzstream.cpp'])
 env.Object(target='SearchGrid', source=['SearchGrid.cpp'])
 env.Object(target='FrameGeometry', source=['FrameGeometry.cpp'])
 env.Object(target='Gather', source=['Gather.cpp'])
 env.Object(target='InputParameters', source=['InputParameters.cpp'])
-env.Object(target='Trajectories', source=['Trajectories.cpp'])
 env.Object(target='frameoutX', source=['frameoutX.cpp'])
 
-env.Program(target='frameout-scons',source=['gzstream', 'SearchGrid', 'FrameGeometry', 'Gather', 'InputParameters', 'Trajectories', 'frameoutX'])
+prog = env.Program(target='frameout-scons',source=['gzstream', 'SearchGrid', 'FrameGeometry', 'Gather', 'InputParameters', 'frameoutX'])
+env.Install('../../.build_' + build_dir + '/bin', prog)
